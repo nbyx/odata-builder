@@ -1,0 +1,55 @@
+{
+  "name": "odata-builder",
+  "version": "0.0.1",
+  "description": "odata builder for easier and typesafe usage",
+  "author": "Marcel Wenner (https://github.com/nbyx)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nbyx/odata-builder/issues"
+  },
+  "homepage": "https://github.com/nbyx/odata-builder#readme",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "rollup --config rollup.config.js",
+    "lint": "eslint . — ext .ts — ignore-path .gitignore — fix",
+    "format": "prettier --write --parser typescript '**/*.ts'",
+    "generate-changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "test": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nbyx/odata-builder.git"
+  },
+  "keywords": [
+    "odata",
+    "builder",
+    "query"
+  ],
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "commit-msg": "ts-node scripts/verify-commit.ts"
+    }
+  },
+  "lint-staged": {
+    "*.ts": [
+      "npm run format",
+      "npm run lint",
+      "git add"
+    ]
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.30.7",
+    "@typescript-eslint/parser": "^5.30.7",
+    "conventional-changelog-cli": "^2.2.2",
+    "eslint": "^8.20.0",
+    "husky": "^8.0.1",
+    "lint-staged": "^13.0.3",
+    "prettier": "^2.7.1",
+    "rollup-plugin-terser": "^7.0.2",
+    "rollup-plugin-ts": "^3.0.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.7.4",
+    "vitest": "^0.18.1"
+  }
+}
