@@ -11,7 +11,7 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "rollup --config rollup.config.js",
-    "lint": "eslint . — ext .ts — ignore-path .gitignore — fix",
+    "lint": "eslint --fix src/**",
     "format": "prettier --write --parser typescript '**/*.ts'",
     "generate-changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
     "test": "vitest"
