@@ -1,16 +1,15 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import fs from "fs";
-
+import fs from 'fs';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 //@ts-ignore
-const message = fs.readFileSync(process.env.HUSKY_GIT_PARAMS!, "utf-8").trim();
+const message = fs.readFileSync(process.env.HUSKY_GIT_PARAMS!, 'utf-8').trim();
 
 const commitRE =
-  /^(revert: )?(feat|fix|docs|dx|style|refactor|perf|test|workflow|build|ci|chore|types|wip)(\(.+\))?: .{1,50}/;
+    /^(revert: )?(feat|fix|docs|dx|style|refactor|perf|test|workflow|build|ci|chore|types|wip)(\(.+\))?: .{1,50}/;
 
 if (!commitRE.test(message)) {
-  console.log();
-  console.error(`invalid commit message format.`);
-  process.exit(1);
+    console.log();
+    console.error(`invalid commit message format.`);
+    process.exit(1);
 }
