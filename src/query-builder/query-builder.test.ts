@@ -1,5 +1,6 @@
 import { expect, describe, it } from 'vitest';
 import { OdataQueryBuilder } from '.';
+import { Guid } from './types/utils/util.types';
 
 describe('query-builder', () => {
     it('should return an empty string if toQuery is called without function', () => {
@@ -136,11 +137,12 @@ describe('query-builder', () => {
         } as const;
 
         const expectedQuery =
-            filterOption.operator === 'contains'
+            '?$filter=' +
+            (filterOption.operator === 'contains'
                 ? `contains(${filterOption.ignoreCase ? 'tolower(' : ''}${
                       filter.field
                   }${filterOption.ignoreCase ? ')' : ''}, '${filter.value}')`
-                : `${filter.field} ${filter.operator} ${filter.value}`;
+                : `${filter.field} ${filter.operator} '${filter.value}'`);
 
         const queryBuilder = new OdataQueryBuilder<typeof item>();
         queryBuilder.filter(filter);
@@ -152,9 +154,10 @@ describe('query-builder', () => {
         const item = {
             x: 't',
             y: 4,
+            z: 'test' as Guid,
         };
         const expectedQuery =
-            '?$count=true&$top=100&$skip=10&$select=x&$orderby=x asc';
+            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d'&$top=100&$skip=10&$select=x&$orderby=x asc";
         const queryBuilder = new OdataQueryBuilder<typeof item>();
 
         queryBuilder
@@ -162,6 +165,11 @@ describe('query-builder', () => {
             .orderBy({ field: 'x', orderDirection: 'asc' })
             .count()
             .top(100)
+            .filter({
+                field: 'z',
+                operator: 'eq',
+                value: '76b44f03-bb98-48eb-81fd-63007465a76d' as Guid,
+            })
             .select('x');
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);

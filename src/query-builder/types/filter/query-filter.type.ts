@@ -1,10 +1,10 @@
-import { Guid } from './util.types';
+import { Guid } from '../utils/util.types';
 
-type GeneralFilterOperators = 'eq' | 'ne';
+export type GeneralFilterOperators = 'eq' | 'ne';
 
-type StringFilterOperators = 'contains' | 'startswith' | 'endswith';
+export type StringFilterOperators = 'contains' | 'startswith' | 'endswith';
 
-type NumberFilterOperators = 'ge' | 'gt' | 'le' | 'lt';
+export type NumberFilterOperators = 'ge' | 'gt' | 'le' | 'lt';
 
 type DateFilterFunctions =
     | 'day'
@@ -42,6 +42,8 @@ type FilterFields<T, VALUETYPE> = {
         ? K
         : never;
 }[Extract<keyof T, string>];
+
+export type GuidFilter = { value: Guid; removeQuotes?: boolean };
 
 export type QueryFilter<T> =
     | {

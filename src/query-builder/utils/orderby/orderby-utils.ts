@@ -1,7 +1,4 @@
-import { OrderByDescriptor } from '../types/orderby-descriptor.type';
-
-export const toSelectQuery = (select: string[]) =>
-    `$select=${select.join(', ')}`;
+import { OrderByDescriptor } from 'src/query-builder/types/orderby/orderby-descriptor.type';
 
 export const toOrderByQuery = <T>(orderBy: OrderByDescriptor<T>[]) => {
     const orderByFields = orderBy.reduce(

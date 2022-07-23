@@ -1,11 +1,14 @@
 import {
     ODataOperators,
     OperatorOrder,
-} from './types/odata-query-operator.type';
-import { OrderByDescriptor } from './types/orderby-descriptor.type';
-import { QueryFilter } from './types/query-filter.type';
-import { isQueryFilter } from './utils/is-query-filter.util';
-import { toOrderByQuery, toSelectQuery } from './utils/operator-utils';
+} from './types/operator/odata-query-operator.type';
+import { OrderByDescriptor } from './types/orderby/orderby-descriptor.type';
+import { QueryFilter } from './types/filter/query-filter.type';
+import { isQueryFilter } from './utils/filter/is-query-filter-util';
+import { toOrderByQuery } from './utils/orderby/orderby-utils';
+import { toSelectQuery } from './utils/select/select-utils';
+import { toFilterQuery } from './utils/filter/filter-utils';
+import { CombinedFilter } from './types/filter/combined-filter.type';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -15,7 +18,7 @@ export class OdataQueryBuilder<T> {
     private operatorOrder: OperatorOrder;
     private selectProps: Set<Extract<keyof T, string>>;
     private orderByProps: Set<OrderByDescriptor<T>>;
-    private filterProps: Set<QueryFilter<T>>;
+    private filterProps: Set<CombinedFilter<T> | QueryFilter<T>>;
 
     constructor() {
         this.countQuery = '';
@@ -23,7 +26,7 @@ export class OdataQueryBuilder<T> {
         this.skipCount = 0;
         this.selectProps = new Set<Extract<keyof T, string>>();
         this.orderByProps = new Set<OrderByDescriptor<T>>();
-        this.filterProps = new Set<QueryFilter<T>>();
+        this.filterProps = new Set<CombinedFilter<T> | QueryFilter<T>>();
 
         this.operatorOrder = {
             count: this.getCountQuery.bind(this),
@@ -65,7 +68,9 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    filter(...filters: QueryFilter<T>[]): OdataQueryBuilder<T>;
+    filter(
+        ...filters: Array<CombinedFilter<T> | QueryFilter<T>>
+    ): OdataQueryBuilder<T>;
     // filter<VALUE extends string>(
     //     ...filters: FilterString<T, VALUE>[]
     // ): OdataQueryBuilder<T>;
@@ -148,6 +153,8 @@ export class OdataQueryBuilder<T> {
     }
 
     private getFilterQuery(): string {
-        return '';
+        return this.filterProps.size > 0
+            ? toFilterQuery(Array.from(this.filterProps.values()))
+            : '';
     }
 }

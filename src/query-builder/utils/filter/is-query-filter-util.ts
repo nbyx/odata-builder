@@ -1,4 +1,4 @@
-import { QueryFilter } from '../types/query-filter.type';
+import { QueryFilter } from '../../types/filter/query-filter.type';
 
 export const isQueryFilter = <T>(filter: unknown): filter is QueryFilter<T> => {
     return (
