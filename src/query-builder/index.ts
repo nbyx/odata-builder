@@ -1,8 +1,13 @@
-import { ODataOperators, OperatorOrder } from './types/odata-query-operator.type';
+import {
+    ODataOperators,
+    OperatorOrder,
+} from './types/odata-query-operator.type';
 import { OrderByDescriptor } from './types/orderby-descriptor.type';
+import { QueryFilter } from './types/query-filter.type';
+import { isQueryFilter } from './utils/is-query-filter.util';
 import { toOrderByQuery, toSelectQuery } from './utils/operator-utils';
 
-export const countEntitiesQuery = '/$count';
+const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
     private countQuery: string;
     private topCount: number;
@@ -10,24 +15,26 @@ export class OdataQueryBuilder<T> {
     private operatorOrder: OperatorOrder;
     private selectProps: Set<Extract<keyof T, string>>;
     private orderByProps: Set<OrderByDescriptor<T>>;
+    private filterProps: Set<QueryFilter<T>>;
 
     constructor() {
         this.countQuery = '';
         this.topCount = 0;
         this.skipCount = 0;
-        this.selectProps = new Set<Extract<keyof T,string>>();
+        this.selectProps = new Set<Extract<keyof T, string>>();
         this.orderByProps = new Set<OrderByDescriptor<T>>();
+        this.filterProps = new Set<QueryFilter<T>>();
 
         this.operatorOrder = {
             count: this.getCountQuery.bind(this),
-            filter: () => '',
+            filter: this.getFilterQuery.bind(this),
             top: this.getTopQuery.bind(this),
             skip: this.getSkipQuery.bind(this),
             select: this.getSelectQuery.bind(this),
             expand: () => '',
             orderby: this.getOrderByQuery.bind(this),
             search: () => '',
-        }
+        };
     }
 
     top(topCount: number): OdataQueryBuilder<T> {
@@ -49,10 +56,27 @@ export class OdataQueryBuilder<T> {
     select(...selectProps: Extract<keyof T, string>[]): OdataQueryBuilder<T> {
         if (!selectProps || selectProps.length === 0) return this;
 
-        for(const option of selectProps) {
+        for (const option of selectProps) {
             if (!option) continue;
 
             this.selectProps.add(option);
+        }
+
+        return this;
+    }
+
+    filter(...filters: QueryFilter<T>[]): OdataQueryBuilder<T>;
+    filter(...filters: string[]): OdataQueryBuilder<T>;
+
+    filter(...filters: unknown[]): OdataQueryBuilder<T> {
+        if (!filters || filters.length === 0) return this;
+
+        for (const filter of filters) {
+            if (!filter) continue;
+
+            if (isQueryFilter(filter)) {
+                this.filterProps.add(filter);
+            }
         }
 
         return this;
@@ -79,12 +103,22 @@ export class OdataQueryBuilder<T> {
     }
 
     toQuery(): string {
-       return Object.keys(this.operatorOrder)
+        return Object.keys(this.operatorOrder)
             .map(key => this.operatorOrder[key as ODataOperators]())
             .filter(value => value !== '')
-            .reduce((prev, curr, index, array) => 
-                prev + `${index === 0 && array.length > 0 && this.countQuery !== countEntitiesQuery ? '?' : ''}` + `${prev && index > 0 ? '&' : ''}${curr}`
-            , '')
+            .reduce(
+                (prev, curr, index, array) =>
+                    prev +
+                    `${
+                        index === 0 &&
+                        array.length > 0 &&
+                        this.countQuery !== countEntitiesQuery
+                            ? '?'
+                            : ''
+                    }` +
+                    `${prev && index > 0 ? '&' : ''}${curr}`,
+                '',
+            );
     }
 
     private getTopQuery(): string {
@@ -92,7 +126,7 @@ export class OdataQueryBuilder<T> {
     }
 
     private getSkipQuery(): string {
-        return this.skipCount > 0 ? `$skip=${this.skipCount}` : ''
+        return this.skipCount > 0 ? `$skip=${this.skipCount}` : '';
     }
 
     private getCountQuery(): string {
@@ -100,10 +134,18 @@ export class OdataQueryBuilder<T> {
     }
 
     private getSelectQuery(): string {
-        return this.selectProps.size > 0 ? toSelectQuery(Array.from(this.selectProps.values())) : '';
+        return this.selectProps.size > 0
+            ? toSelectQuery(Array.from(this.selectProps.values()))
+            : '';
     }
 
     private getOrderByQuery(): string {
-        return this.orderByProps.size > 0 ? toOrderByQuery(Array.from(this.orderByProps.values())) : '';
+        return this.orderByProps.size > 0
+            ? toOrderByQuery(Array.from(this.orderByProps.values()))
+            : '';
+    }
+
+    private getFilterQuery(): string {
+        return '';
     }
 }
