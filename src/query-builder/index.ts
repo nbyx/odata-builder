@@ -66,7 +66,9 @@ export class OdataQueryBuilder<T> {
     }
 
     filter(...filters: QueryFilter<T>[]): OdataQueryBuilder<T>;
-    filter(...filters: string[]): OdataQueryBuilder<T>;
+    // filter<VALUE extends string>(
+    //     ...filters: FilterString<T, VALUE>[]
+    // ): OdataQueryBuilder<T>;
 
     filter(...filters: unknown[]): OdataQueryBuilder<T> {
         if (!filters || filters.length === 0) return this;
