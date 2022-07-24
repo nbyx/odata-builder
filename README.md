@@ -35,7 +35,7 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
     .count(true)
     .filter(...) // only for demonstrating the count
     .toQuery();
-//  ^ $count/?$filter=....
+//  ^ /$count?$filter=....
 ```
 
 You can also decide if you want to have single quotes when querying with **guid**
@@ -52,7 +52,7 @@ type MyAwesomeDto = {
 const filter = {
     field: 'id',
     operator: 'eq'
-    value: 'f92477a9-5761-485a-b7cd-30561e2f888b' as Guid, // must be guid
+    value: 'f92477a9-5761-485a-b7cd-30561e2f888b', // must be guid
     removeQuotes: true, // if not defined the guid will be added to the query with single quotes
 }
 
