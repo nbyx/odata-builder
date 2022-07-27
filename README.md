@@ -116,13 +116,13 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
     * Filters can be added with strings that will get typechecked
 * Generate Queries to manipluate data (soon™)
 # ToDos
-[x] Add **select** query
-[x] Add **orderby** with order direction asc or desc
-[x] Add single **filter** support with lambda expressions
-[ ] Add string filter support with typechecking (in progress)
-[ ] Add expand support
-[ ] Add odata function support (number, Date, string) (partially done)
-[ ] Add search support
-[ ] Add support for data modification queries with odata 
+- [x] Add **select** query
+- [x] Add **orderby** with order direction asc or desc
+- [x] Add single **filter** support with lambda expressions
+- [ ] Add string filter support with typechecking (in progress)
+- [ ] Add expand support
+- [ ] Add odata function support (number, Date, string) (partially done)
+- [ ] Add search support
+- [ ] Add support for data modification queries with odata 
 
 Any feature missing here? Please open an issue and add your feature request.
