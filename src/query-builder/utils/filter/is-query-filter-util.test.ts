@@ -30,4 +30,20 @@ describe('isQueryFilter', () => {
 
         expect(isQueryFilter(filter)).toBeTruthy();
     });
+
+    it('should return lambda operation', () => {
+        const item = {
+            x: [{ y: '' }],
+        };
+
+        const filter: QueryFilter<typeof item> = {
+            field: 'x',
+            operator: 'contains',
+            value: '',
+            lambdaOperator: 'any',
+            innerField: 'y',
+        };
+
+        expect(isQueryFilter(filter)).toBeTruthy();
+    });
 });

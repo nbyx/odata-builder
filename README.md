@@ -62,20 +62,67 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 //  ^ ?$filter=id eq some-guid
 
 ```
+
+If there is an array in your item, you can use lambda expressions in oData to filter for them:
+
+```javascript
+type MyAwesomeDto = {
+    ...
+    someProperty: string[]
+    ...
+}
+
+const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+    .filter({
+        field: 'someProperty',
+        operator: 'contains',
+        value: 'test',
+        lambdaOperator: 'any',
+    })
+    .toQuery();
+//  ^ ?$filter=someProperty/any(s: contains(tolower(s), 'test'));
+```
+
+There is also autocomplete for every property of the filter.
+
+If the inner array ist an array of objects you need to provide the inner field for the filter:
+
+```javascript
+type MyAwesomeDto = {
+    ...
+    someProperty: { someInnerProperty: string}[]
+    ...
+}
+
+const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+    .filter({
+        field: 'someProperty',
+        operator: 'contains',
+        value: 'test',
+        lambdaOperator: 'any',
+        innerProperty: 'someInnerProperty' // <-- you will also get autocomplete for this property
+    })
+    .toQuery();
+//  ^ ?$filter=someProperty/any(s: contains(tolower(s/someInnerProperty), 'test'));
+
+```
+
 # Features
 * Generate oData4 queries with typesafe objects.
     * Check of field, value and possible operator for a filter
     * Orderby, Select only fields of your model
+    * **Autocomplete** for every property in your filter, orderby, etc...
+    * Filtering of arrays in your model
     * Filters can be added with strings that will get typechecked
 * Generate Queries to manipluate data (soon™)
 # ToDos
-- [x] Add select query
-- [x] Add orderby with order direction asc or desc
-- [x] Add single filter support with
-- [ ] Add string filter support with typechecking (in progress)
-- [ ] Add expand support
-- [ ] Add odata function support (number, Date, string) (partially done)
-- [ ] Add search support
-- [ ] Add support for data modification queries with odata 
+[x] Add **select** query
+[x] Add **orderby** with order direction asc or desc
+[x] Add single **filter** support with lambda expressions
+[ ] Add string filter support with typechecking (in progress)
+[ ] Add expand support
+[ ] Add odata function support (number, Date, string) (partially done)
+[ ] Add search support
+[ ] Add support for data modification queries with odata 
 
 Any feature missing here? Please open an issue and add your feature request.

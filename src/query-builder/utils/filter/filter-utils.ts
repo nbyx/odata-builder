@@ -12,7 +12,7 @@ export const toFilterQuery = <T>(
     return filters.reduce(
         (prev, curr, index) =>
             isQueryFilter(curr)
-                ? prev + (index > 0 ? 'and ' : '') + toQueryFilterQuery(curr)
+                ? prev + (index > 0 ? ' and ' : '') + toQueryFilterQuery(curr)
                 : '',
         '$filter=',
     );
@@ -21,24 +21,28 @@ export const toFilterQuery = <T>(
 export const toQueryFilterQuery = <T>(filter: QueryFilter<T>): string => {
     if (
         typeof filter.value === 'string' &&
-        (!isGuidFilter(filter) ||
+        ((!isGuidFilter(filter) && !filter.lambdaOperator) ||
             (isGuidFilter(filter) && !filter.removeQuotes))
     ) {
-        return isStringFilterFunction(filter.operator)
-            ? `${filter.operator}(${hasIgnoreCase(filter) ? 'tolower(' : ''}${
-                  filter.field
-              }${hasIgnoreCase(filter) ? ')' : ''}, '${filter.value}')`
-            : `${filter.field} ${filter.operator} '${filter.value}'`;
+        return getStringFilter(filter, filter.field);
     }
 
     if (
-        (isGuidFilter(filter) && filter.removeQuotes) ||
-        typeof filter.value === 'boolean' ||
-        typeof filter.value === 'number'
+        !filter.lambdaOperator &&
+        ((isGuidFilter(filter) && filter.removeQuotes) ||
+            typeof filter.value === 'boolean' ||
+            typeof filter.value === 'number')
     ) {
         return `${filter.field} ${filter.operator} ${filter.value}`;
     }
 
+    if (filter.lambdaOperator) {
+        console.log(filter);
+        return `${filter.field}/${filter.lambdaOperator}(s: ${getStringFilter(
+            filter,
+            `s${filter.innerField ? '/' + filter.innerField : ''}`,
+        )})`;
+    }
     return '';
 };
 
@@ -58,3 +62,10 @@ const isGuidFilter = (filter: unknown): filter is GuidFilter => {
         (filter as GuidFilter).value,
     );
 };
+function getStringFilter<T>(filter: QueryFilter<T>, field: string): string {
+    return isStringFilterFunction(filter.operator)
+        ? `${filter.operator}(${
+              hasIgnoreCase(filter) ? 'tolower(' : ''
+          }${field}${hasIgnoreCase(filter) ? ')' : ''}, '${filter.value}')`
+        : `${field} ${filter.operator} '${filter.value}'`;
+}

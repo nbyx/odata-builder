@@ -59,4 +59,43 @@ describe('toQueryFilterQuery', () => {
 
         expect(result).toBe('');
     });
+
+    it('should return filter string with any-lambda', () => {
+        const item = {
+            x: [{ y: '' }],
+        };
+        const expectedResult = "x/any(s: contains(tolower(s/y), ''))";
+
+        const filter = {
+            field: 'x',
+            operator: 'contains',
+            value: '',
+            lambdaOperator: 'any',
+            ignoreCase: true,
+            innerField: 'y',
+        } as const;
+
+        const result = toQueryFilterQuery<typeof item>(filter);
+
+        expect(result).toBe(expectedResult);
+    });
+
+    it('should return filter string with all-lamda for string array', () => {
+        const item = {
+            x: [''],
+        };
+        const expectedResult = "x/any(s: contains(tolower(s), ''))";
+
+        const filter = {
+            field: 'x',
+            operator: 'contains',
+            value: '',
+            lambdaOperator: 'any',
+            ignoreCase: true,
+        } as const;
+
+        const result = toQueryFilterQuery<typeof item>(filter);
+
+        expect(result).toBe(expectedResult);
+    });
 });

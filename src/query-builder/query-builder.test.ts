@@ -149,6 +149,28 @@ describe('query-builder', () => {
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
+    
+    it('should add the filter with lambda combined with non lambda filter', () => {
+        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const item = {
+            x: [{y: ''}],
+            z: false,
+        };
+        const expectedResult = `?$filter=x/any(s: contains(s/y, '1')) and z eq false`;
+
+        const filter = {
+            field: 'x',
+            operator: 'contains',
+            value: '1',
+            lambdaOperator: 'any',
+            innerField: 'y',
+        } as const;
+
+        queryBuilder.filter(filter).filter({field: 'z', operator: 'eq', value: false});
+
+        expect(queryBuilder.toQuery()).toBe(expectedResult);
+        
+    });
 
     it('should combine the filters regardless of order', () => {
         const item = {
