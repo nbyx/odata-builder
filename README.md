@@ -78,6 +78,7 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
         operator: 'contains',
         value: 'test',
         lambdaOperator: 'any',
+        ignoreCase: true,
     })
     .toQuery();
 //  ^ ?$filter=someProperty/any(s: contains(tolower(s), 'test'));
@@ -90,7 +91,7 @@ If the inner array ist an array of objects you need to provide the inner field f
 ```javascript
 type MyAwesomeDto = {
     ...
-    someProperty: { someInnerProperty: string}[]
+    someProperty: { someInnerProperty: string }[]
     ...
 }
 
@@ -100,7 +101,8 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
         operator: 'contains',
         value: 'test',
         lambdaOperator: 'any',
-        innerProperty: 'someInnerProperty' // <-- you will also get autocomplete for this property
+        innerProperty: 'someInnerProperty', // <-- you will also get autocomplete for this property
+        ignoreCase: true,
     })
     .toQuery();
 //  ^ ?$filter=someProperty/any(s: contains(tolower(s/someInnerProperty), 'test'));
