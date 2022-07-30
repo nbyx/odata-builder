@@ -109,6 +109,22 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 
 ```
 
+If you want to choose the filter logic or you need to filter for two depended fields there is the **CombinedFilter**:
+
+```javascript
+ const queryBuilder = new ODataQueryBuilder<MyAwesomeDto>
+    .filter({
+        logic: 'or',
+        filters: [
+            { field: 'x', operator: 'eq', value: 'test' },
+            { field: 'y', operator: 'eq', value: 5 },
+        ],
+    })
+    .toQuery();
+//  ^ ?$filter=(x eq test or y eq 5)
+```
+You could combine it with multiple Combined filters or even with the single QueryFilter.
+
 # Features
 * Generate oData4 queries with typesafe objects.
     * Check of field, value and possible operator for a filter
