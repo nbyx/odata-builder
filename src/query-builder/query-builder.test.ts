@@ -149,11 +149,32 @@ describe('query-builder', () => {
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
-    
+
+    it('should add space before and when combining two filters', () => {
+        interface MyAwesomeDto {
+            y: string;
+            x: Guid;
+        }
+        const expectedResult = `?$filter=x eq 76b44f03-bb98-48eb-81fd-63007465a76d and y eq ''`;
+        const filter = {
+            field: 'x',
+            operator: 'eq',
+            value: '76b44f03-bb98-48eb-81fd-63007465a76d' as Guid,
+            removeQuotes: true,
+        } as const;
+
+        const query = new OdataQueryBuilder<MyAwesomeDto>()
+            .filter(filter)
+            .filter({ field: 'y', operator: 'eq', value: '' })
+            .toQuery();
+
+        expect(query).toBe(expectedResult);
+    });
+
     it('should add the filter with lambda combined with non lambda filter', () => {
         const queryBuilder = new OdataQueryBuilder<typeof item>();
         const item = {
-            x: [{y: ''}],
+            x: [{ y: '' }],
             z: false,
         };
         const expectedResult = `?$filter=x/any(s: contains(s/y, '1')) and z eq false`;
@@ -166,10 +187,11 @@ describe('query-builder', () => {
             innerField: 'y',
         } as const;
 
-        queryBuilder.filter(filter).filter({field: 'z', operator: 'eq', value: false});
+        queryBuilder
+            .filter(filter)
+            .filter({ field: 'z', operator: 'eq', value: false });
 
         expect(queryBuilder.toQuery()).toBe(expectedResult);
-        
     });
 
     it('should combine the filters regardless of order', () => {
@@ -179,7 +201,7 @@ describe('query-builder', () => {
             z: 'test' as Guid,
         };
         const expectedQuery =
-            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d'&$top=100&$skip=10&$select=x&$orderby=x asc";
+            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d' and (x eq 'test' or y eq 5)&$top=100&$skip=10&$select=x&$orderby=x asc";
         const queryBuilder = new OdataQueryBuilder<typeof item>();
 
         queryBuilder
@@ -191,6 +213,13 @@ describe('query-builder', () => {
                 field: 'z',
                 operator: 'eq',
                 value: '76b44f03-bb98-48eb-81fd-63007465a76d' as Guid,
+            })
+            .filter({
+                logic: 'or',
+                filters: [
+                    { field: 'x', operator: 'eq', value: 'test' },
+                    { field: 'y', operator: 'eq', value: 5 },
+                ],
             })
             .select('x');
 

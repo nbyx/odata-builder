@@ -9,6 +9,7 @@ import { toOrderByQuery } from './utils/orderby/orderby-utils';
 import { toSelectQuery } from './utils/select/select-utils';
 import { toFilterQuery } from './utils/filter/filter-utils';
 import { CombinedFilter } from './types/filter/combined-filter.type';
+import { isCombinedFilter } from './utils/filter/combined-filter-util';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -40,7 +41,7 @@ export class OdataQueryBuilder<T> {
         };
     }
 
-    top(topCount: number): OdataQueryBuilder<T> {
+    top(topCount: number): this {
         if (!topCount || this.topCount) return this;
 
         this.topCount = topCount;
@@ -48,7 +49,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    skip(skipCount: number): OdataQueryBuilder<T> {
+    skip(skipCount: number): this {
         if (!skipCount || this.skipCount) return this;
 
         this.skipCount = skipCount;
@@ -56,8 +57,8 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    select(...selectProps: Extract<keyof T, string>[]): OdataQueryBuilder<T> {
-        if (!selectProps || selectProps.length === 0) return this;
+    select(...selectProps: Extract<keyof T, string>[]): this {
+        if (selectProps.length === 0) return this;
 
         for (const option of selectProps) {
             if (!option) continue;
@@ -69,19 +70,19 @@ export class OdataQueryBuilder<T> {
     }
 
     filter(
-        ...filters: Array<CombinedFilter<T> | QueryFilter<T>>
+        ...filters: (CombinedFilter<T> | QueryFilter<T>)[]
     ): OdataQueryBuilder<T>;
     // filter<VALUE extends string>(
     //     ...filters: FilterString<T, VALUE>[]
     // ): OdataQueryBuilder<T>;
 
-    filter(...filters: unknown[]): OdataQueryBuilder<T> {
-        if (!filters || filters.length === 0) return this;
+    filter(...filters: unknown[]): this {
+        if (filters.length === 0) return this;
 
         for (const filter of filters) {
             if (!filter) continue;
 
-            if (isQueryFilter(filter)) {
+            if (isQueryFilter(filter) || isCombinedFilter<T>(filter)) {
                 this.filterProps.add(filter);
             }
         }
@@ -89,7 +90,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    count(countEntities = false): OdataQueryBuilder<T> {
+    count(countEntities = false): this {
         if (this.countQuery) return this;
 
         this.countQuery = countEntities ? countEntitiesQuery : '$count=true';
@@ -97,12 +98,10 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    orderBy(...orderBy: OrderByDescriptor<T>[]): OdataQueryBuilder<T> {
-        if (!orderBy || orderBy.length === 0) return this;
+    orderBy(...orderBy: OrderByDescriptor<T>[]): this {
+        if (orderBy.length === 0) return this;
 
         for (const option of orderBy) {
-            if (!option) continue;
-
             this.orderByProps.add(option);
         }
 

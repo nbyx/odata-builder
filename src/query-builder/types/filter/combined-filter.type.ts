@@ -1,6 +1,6 @@
 import { QueryFilter } from './query-filter.type';
 
-export type CombinedFilter<T> = {
+export interface CombinedFilter<T> {
     logic: 'and' | 'or';
-    filters: QueryFilter<T>;
-};
+    filters: QueryFilter<T>[];
+}

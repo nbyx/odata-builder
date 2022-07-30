@@ -1,7 +1,8 @@
+import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
 import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
 import { Guid } from 'src/query-builder/types/utils/util.types';
 import { describe, expect, it } from 'vitest';
-import { toQueryFilterQuery } from './filter-utils';
+import { toFilterQuery, toQueryFilterQuery } from './filter-utils';
 
 describe('toQueryFilterQuery', () => {
     it('should not add quotes to guid filter if removeQuotes is true', () => {
@@ -95,6 +96,47 @@ describe('toQueryFilterQuery', () => {
         } as const;
 
         const result = toQueryFilterQuery<typeof item>(filter);
+
+        expect(result).toBe(expectedResult);
+    });
+
+    it('should return combined filter string with logic or', () => {
+        const filter: CombinedFilter<{ x: boolean }> = {
+            logic: 'or',
+            filters: [
+                { field: 'x', operator: 'eq', value: true },
+                { field: 'x', operator: 'eq', value: false },
+            ],
+        };
+
+        const expectedResult = '$filter=(x eq true or x eq false)';
+
+        const result = toFilterQuery<{ x: boolean }>([filter]);
+
+        expect(result).toBe(expectedResult);
+    });
+
+    it('should return combined filters string with logic or with filter array', () => {
+        const filter1: CombinedFilter<{ x: boolean }> = {
+            logic: 'or',
+            filters: [
+                { field: 'x', operator: 'eq', value: true },
+                { field: 'x', operator: 'eq', value: false },
+            ],
+        };
+
+        const filter2: CombinedFilter<{ x: boolean }> = {
+            logic: 'and',
+            filters: [
+                { field: 'x', operator: 'eq', value: true },
+                { field: 'x', operator: 'eq', value: false },
+            ],
+        };
+
+        const expectedResult =
+            '$filter=(x eq true or x eq false) and (x eq true and x eq false)';
+
+        const result = toFilterQuery<{ x: boolean }>([filter1, filter2]);
 
         expect(result).toBe(expectedResult);
     });
