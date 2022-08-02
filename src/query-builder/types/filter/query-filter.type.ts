@@ -72,6 +72,8 @@ export type StringFilterOperators = 'contains' | 'startswith' | 'endswith';
 
 export type NumberFilterOperators = 'ge' | 'gt' | 'le' | 'lt';
 
+type DateFilterOperators = NumberFilterOperators;
+
 export type DateFilterFunctions =
     | 'day'
     | 'hour'
@@ -86,6 +88,8 @@ export type DependentFilterOperators<VALUETYPE> = VALUETYPE extends string
     ? StringFilterOperators
     : VALUETYPE extends number
     ? NumberFilterOperators
+    : VALUETYPE extends Date
+    ? DateFilterOperators
     : never;
 
 export type FilterOperators<VALUETYPE> =
