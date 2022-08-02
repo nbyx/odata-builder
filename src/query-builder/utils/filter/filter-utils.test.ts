@@ -140,4 +140,21 @@ describe('toQueryFilterQuery', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return combined filters string with date values', () => {
+        const date = new Date(Date.now());
+        const expectedResult = `$filter=(x eq ${date.toISOString()} or x eq ${date.toISOString()})`;
+
+        const filter: CombinedFilter<{ x: Date }> = {
+            logic: 'or',
+            filters: [
+                { field: 'x', operator: 'eq', value: date },
+                { field: 'x', operator: 'eq', value: date },
+            ],
+        };
+
+        const result = toFilterQuery<{ x: Date }>([filter]);
+
+        expect(result).toBe(expectedResult);
+    });
 });

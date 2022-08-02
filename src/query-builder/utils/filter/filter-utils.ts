@@ -50,9 +50,10 @@ export const toQueryFilterQuery = <T>(filter: QueryFilter<T>): string => {
         !filter.lambdaOperator &&
         ((isGuidFilter(filter) && filter.removeQuotes) ||
             typeof filter.value === 'boolean' ||
-            typeof filter.value === 'number')
+            typeof filter.value === 'number' ||
+            filter.value instanceof Date)
     ) {
-        return `${filter.field} ${filter.operator} ${filter.value.toString()}`;
+        return `${filter.field} ${filter.operator} ${getFilterValue(filter)}`;
     }
 
     if (filter.lambdaOperator) {
@@ -92,4 +93,9 @@ const getStringFilter = <T>(filter: QueryFilter<T>, field: string): string => {
               hasIgnoreCase(filter) ? ')' : ''
           }, '${filter.value.toString()}')`
         : `${field} ${filter.operator} '${filter.value.toString()}'`;
+};
+const getFilterValue = <T>(filter: QueryFilter<T>) => {
+    if (filter.value instanceof Date) return filter.value.toISOString();
+
+    return filter.value.toString();
 };

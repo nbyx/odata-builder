@@ -26,7 +26,14 @@
   "keywords": [
     "odata",
     "builder",
-    "query"
+    "query",
+    "odata v4",
+    "odata client",
+    "typescript",
+    "angular",
+    "react",
+    "javascript",
+    "typesafe"
   ],
   "lint-staged": {
     "*.ts": [
