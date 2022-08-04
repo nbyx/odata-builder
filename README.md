@@ -129,24 +129,24 @@ If you want to add a function to your codebase that encapsulates the query creat
 
 ```javascript
 const item = {
-            x: 4,
-            y: 'test',
-            z: new Date(Date.now()),
-        };
-const expectedQuery = '?$filter=y eq 4';
+    x: 4,
+    y: 'test',
+    z: new Date(Date.now()),
+};
 
 const testFn = (
     field: FilterFields<typeof item, string>, // you can use that type to get only the fields with type string
+    operator: FilterOperators<string>, // only allows filter operators for the given type
     value: string, // you should use the type that you have defined in the FilterFields type
 ): string => {
     const queryBuilder = new OdataQueryBuilder<typeof item>();
 
-    queryBuilder.filter({ field, operator: 'eq', value });
+    queryBuilder.filter({ field, operator, value });
 
     return queryBuilder.toQuery();
 };
 
-const result = testFn('y', 'test');
+const result = testFn('y', 'eq', 'test');
 //  ^ ?$filter=y eq 'test'
 ```
 
