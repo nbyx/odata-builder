@@ -125,6 +125,31 @@ If you want to choose the filter logic or you need to filter for two depended fi
 ```
 You could combine it with multiple Combined filters or even with the single QueryFilter.
 
+If you want to add a function to your codebase that encapsulates the query creation you can do it like this:
+
+```javascript
+const item = {
+            x: 4,
+            y: 'test',
+            z: new Date(Date.now()),
+        };
+const expectedQuery = '?$filter=y eq 4';
+
+const testFn = (
+    field: FilterFields<typeof item, string>, // you can use that type to get only the fields with type string
+    value: string, // you should use the type that you have defined in the FilterFields type
+): string => {
+    const queryBuilder = new OdataQueryBuilder<typeof item>();
+
+    queryBuilder.filter({ field, operator: 'eq', value });
+
+    return queryBuilder.toQuery();
+};
+
+const result = testFn('y', 'test');
+//  ^ ?$filter=y eq 'test'
+```
+
 # Features
 * Generate oData4 queries with typesafe objects.
     * Check of field, value and possible operator for a filter

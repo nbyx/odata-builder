@@ -1,5 +1,6 @@
 import { expect, describe, it } from 'vitest';
 import { OdataQueryBuilder } from '.';
+import { FilterFields } from './types/filter/query-filter.type';
 import { Guid } from './types/utils/util.types';
 
 describe('query-builder', () => {
@@ -224,5 +225,29 @@ describe('query-builder', () => {
             .select('x');
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should return a filter string with computed values for filter', () => {
+        const item = {
+            x: 4,
+            y: 'test',
+            z: new Date(Date.now()),
+        };
+        const expectedQuery = "?$filter=y eq '4'";
+
+        const testFn = (
+            field: FilterFields<typeof item, string>,
+            value: string,
+        ): string => {
+            const queryBuilder = new OdataQueryBuilder<typeof item>();
+
+            queryBuilder.filter({ field, operator: 'eq', value });
+
+            return queryBuilder.toQuery();
+        };
+
+        const result = testFn('y', '4');
+
+        expect(result).toBe(expectedQuery);
     });
 });
