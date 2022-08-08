@@ -175,11 +175,7 @@ describe('query-builder', () => {
         expect(query).toBe(expectedResult);
     });
     it('should also filter with optional properties', () => {
-        interface MyAwesomeDto {
-            x?: { code: string };
-            y: string;
-        }
-
+        type MyAwesomeDto = { x?: { code: string } } & { y: boolean };
         const expectedResult = "?$filter=x/code eq 'test'";
 
         const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>();
