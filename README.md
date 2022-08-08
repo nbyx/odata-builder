@@ -149,7 +149,29 @@ const testFn = (
 const result = testFn('y', 'eq', 'test');
 //  ^ ?$filter=y eq 'test'
 ```
+If you need to expand a property you can use the expand function:
 
+```javascript
+const item = {
+    x: { someProperty: '' },
+}
+const queryBuilder = new OdataQueryBuilder<typeof item>();
+    .expand('x')
+    .toQuery();
+//  ^ ?expand=x  
+```
+
+You can do this with inner properties as well:
+
+```javascript
+const item = {
+    x: { someProperty: { nestedProperty: '' } },
+}
+const queryBuilder = new OdataQueryBuilder<typeof item>();
+    .expand('x/someProperty') // you will get autocomplete for these properties
+    .toQuery();
+//  ^ ?expand=x/someProperty 
+```
 # Features
 * Generate oData4 queries with typesafe objects.
     * Check of field, value and possible operator for a filter
@@ -163,7 +185,7 @@ const result = testFn('y', 'eq', 'test');
 - [x] Add **orderby** with order direction asc or desc
 - [x] Add single **filter** support with lambda expressions
 - [ ] Add string filter support with typechecking (in progress)
-- [ ] Add expand support
+- [x] Add expand support
 - [ ] Add odata function support (number, Date, string) (partially done)
 - [ ] Add search support
 - [ ] Add support for data modification queries with odata 

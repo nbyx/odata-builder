@@ -1,6 +1,9 @@
 import { expect, describe, it } from 'vitest';
 import { OdataQueryBuilder } from '.';
-import { FilterFields } from './types/filter/query-filter.type';
+import {
+    FilterFields,
+    FilterOperators,
+} from './types/filter/query-filter.type';
 import { Guid } from './types/utils/util.types';
 
 describe('query-builder', () => {
@@ -197,12 +200,13 @@ describe('query-builder', () => {
 
     it('should combine the filters regardless of order', () => {
         const item = {
+            w: { someProperty: '' },
             x: 't',
             y: 4,
             z: 'test' as Guid,
         };
         const expectedQuery =
-            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d' and (x eq 'test' or y eq 5)&$top=100&$skip=10&$select=x&$orderby=x asc";
+            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d' and (x eq 'test' or y eq 5)&$top=100&$skip=10&$select=x&$expand=w&$orderby=x asc";
         const queryBuilder = new OdataQueryBuilder<typeof item>();
 
         queryBuilder
@@ -222,6 +226,7 @@ describe('query-builder', () => {
                     { field: 'y', operator: 'eq', value: 5 },
                 ],
             })
+            .expand('w')
             .select('x');
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
@@ -237,16 +242,17 @@ describe('query-builder', () => {
 
         const testFn = (
             field: FilterFields<typeof item, string>,
+            operator: FilterOperators<string>,
             value: string,
         ): string => {
             const queryBuilder = new OdataQueryBuilder<typeof item>();
 
-            queryBuilder.filter({ field, operator: 'eq', value });
+            queryBuilder.filter({ field, operator, value });
 
             return queryBuilder.toQuery();
         };
 
-        const result = testFn('y', '4');
+        const result = testFn('y', 'eq', '4');
 
         expect(result).toBe(expectedQuery);
     });

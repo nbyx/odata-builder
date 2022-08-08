@@ -10,6 +10,8 @@ import { toSelectQuery } from './utils/select/select-utils';
 import { toFilterQuery } from './utils/filter/filter-utils';
 import { CombinedFilter } from './types/filter/combined-filter.type';
 import { isCombinedFilter } from './utils/filter/combined-filter-util';
+import { ExpandFields } from './types/expand/expand-fields.type';
+import { toExpandQuery } from './utils/expand/expand-util';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -20,6 +22,7 @@ export class OdataQueryBuilder<T> {
     private selectProps: Set<Extract<keyof T, string>>;
     private orderByProps: Set<OrderByDescriptor<T>>;
     private filterProps: Set<CombinedFilter<T> | QueryFilter<T>>;
+    private expandProps: Set<ExpandFields<T>>;
 
     constructor() {
         this.countQuery = '';
@@ -28,6 +31,7 @@ export class OdataQueryBuilder<T> {
         this.selectProps = new Set<Extract<keyof T, string>>();
         this.orderByProps = new Set<OrderByDescriptor<T>>();
         this.filterProps = new Set<CombinedFilter<T> | QueryFilter<T>>();
+        this.expandProps = new Set<ExpandFields<T>>();
 
         this.operatorOrder = {
             count: this.getCountQuery.bind(this),
@@ -35,7 +39,7 @@ export class OdataQueryBuilder<T> {
             top: this.getTopQuery.bind(this),
             skip: this.getSkipQuery.bind(this),
             select: this.getSelectQuery.bind(this),
-            expand: () => '',
+            expand: this.getExpandQuery.bind(this),
             orderby: this.getOrderByQuery.bind(this),
             search: () => '',
         };
@@ -85,6 +89,16 @@ export class OdataQueryBuilder<T> {
             if (isQueryFilter(filter) || isCombinedFilter<T>(filter)) {
                 this.filterProps.add(filter);
             }
+        }
+
+        return this;
+    }
+
+    expand(...expandFields: ExpandFields<T>[]): this {
+        if (expandFields.length === 0) return this;
+
+        for (const expand of expandFields) {
+            this.expandProps.add(expand);
         }
 
         return this;
@@ -154,6 +168,12 @@ export class OdataQueryBuilder<T> {
     private getFilterQuery(): string {
         return this.filterProps.size > 0
             ? toFilterQuery(Array.from(this.filterProps.values()))
+            : '';
+    }
+
+    private getExpandQuery(): string {
+        return this.expandProps.size > 0
+            ? toExpandQuery(Array.from(this.expandProps.values()))
             : '';
     }
 }
