@@ -19,19 +19,23 @@ export class OdataQueryBuilder<T> {
     private topCount: number;
     private skipCount: number;
     private operatorOrder: OperatorOrder;
-    private selectProps: Set<Extract<keyof T, string>>;
-    private orderByProps: Set<OrderByDescriptor<T>>;
-    private filterProps: Set<CombinedFilter<T> | QueryFilter<T>>;
-    private expandProps: Set<ExpandFields<T>>;
+    private selectProps: Set<Extract<keyof Required<T>, string>>;
+    private orderByProps: Set<OrderByDescriptor<Required<T>>>;
+    private filterProps: Set<
+        CombinedFilter<Required<T>> | QueryFilter<Required<T>>
+    >;
+    private expandProps: Set<ExpandFields<Required<T>>>;
 
     constructor() {
         this.countQuery = '';
         this.topCount = 0;
         this.skipCount = 0;
-        this.selectProps = new Set<Extract<keyof T, string>>();
-        this.orderByProps = new Set<OrderByDescriptor<T>>();
-        this.filterProps = new Set<CombinedFilter<T> | QueryFilter<T>>();
-        this.expandProps = new Set<ExpandFields<T>>();
+        this.selectProps = new Set<Extract<keyof Required<T>, string>>();
+        this.orderByProps = new Set<OrderByDescriptor<Required<T>>>();
+        this.filterProps = new Set<
+            CombinedFilter<Required<T>> | QueryFilter<Required<T>>
+        >();
+        this.expandProps = new Set<ExpandFields<Required<T>>>();
 
         this.operatorOrder = {
             count: this.getCountQuery.bind(this),
@@ -61,7 +65,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    select(...selectProps: Extract<keyof T, string>[]): this {
+    select(...selectProps: Extract<keyof Required<T>, string>[]): this {
         if (selectProps.length === 0) return this;
 
         for (const option of selectProps) {
@@ -74,8 +78,8 @@ export class OdataQueryBuilder<T> {
     }
 
     filter(
-        ...filters: (CombinedFilter<T> | QueryFilter<T>)[]
-    ): OdataQueryBuilder<T>;
+        ...filters: (CombinedFilter<Required<T>> | QueryFilter<Required<T>>)[]
+    ): this;
     // filter<VALUE extends string>(
     //     ...filters: FilterString<T, VALUE>[]
     // ): OdataQueryBuilder<T>;
@@ -86,7 +90,10 @@ export class OdataQueryBuilder<T> {
         for (const filter of filters) {
             if (!filter) continue;
 
-            if (isQueryFilter(filter) || isCombinedFilter<T>(filter)) {
+            if (
+                isQueryFilter<Required<T>>(filter) ||
+                isCombinedFilter<Required<T>>(filter)
+            ) {
                 this.filterProps.add(filter);
             }
         }
@@ -94,7 +101,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    expand(...expandFields: ExpandFields<T>[]): this {
+    expand(...expandFields: ExpandFields<Required<T>>[]): this {
         if (expandFields.length === 0) return this;
 
         for (const expand of expandFields) {
@@ -112,7 +119,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    orderBy(...orderBy: OrderByDescriptor<T>[]): this {
+    orderBy(...orderBy: OrderByDescriptor<Required<T>>[]): this {
         if (orderBy.length === 0) return this;
 
         for (const option of orderBy) {

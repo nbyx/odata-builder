@@ -174,7 +174,20 @@ describe('query-builder', () => {
 
         expect(query).toBe(expectedResult);
     });
+    it('should also filter with optional properties', () => {
+        interface MyAwesomeDto {
+            x?: { code: string };
+            y: string;
+        }
 
+        const expectedResult = "?$filter=x/code eq 'test'";
+
+        const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>();
+
+        queryBuilder.filter({ field: 'x/code', operator: 'eq', value: 'test' });
+
+        expect(queryBuilder.toQuery()).toBe(expectedResult);
+    });
     it('should add the filter with lambda combined with non lambda filter', () => {
         const queryBuilder = new OdataQueryBuilder<typeof item>();
         const item = {
