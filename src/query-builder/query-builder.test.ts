@@ -206,6 +206,37 @@ describe('query-builder', () => {
 
         expect(queryBuilder.toQuery()).toBe(expectedResult);
     });
+    it('should add the filter query also for nullable types', () => {
+        interface MyAwesomeDto {
+            test: string | null;
+        }
+
+        const expectedResult = "?$filter=test eq '1'";
+
+        const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>().filter({
+            field: 'test',
+            operator: 'eq',
+            value: '1',
+        });
+
+        expect(queryBuilder.toQuery()).toBe(expectedResult);
+    });
+
+    it('should add the filter query also for nullable types in nested properties', () => {
+        interface MyAwesomeDto {
+            test: { x: string | null };
+        }
+
+        const expectedResult = "?$filter=test/x eq '1'";
+
+        const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>().filter({
+            field: 'test/x',
+            operator: 'eq',
+            value: '1',
+        });
+
+        expect(queryBuilder.toQuery()).toBe(expectedResult);
+    });
 
     it('should combine the filters regardless of order', () => {
         const item = {

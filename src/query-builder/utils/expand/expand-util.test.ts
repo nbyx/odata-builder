@@ -16,7 +16,7 @@ describe('expand-util', () => {
 
     it('should return expand query with inner field in navigation property', () => {
         const item = {
-            x: { someProperty: '' },
+            x: { someProperty: { code: 's' } },
         };
 
         const expectedResult = '$expand=x/someProperty';

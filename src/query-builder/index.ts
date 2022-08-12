@@ -19,8 +19,8 @@ export class OdataQueryBuilder<T> {
     private topCount: number;
     private skipCount: number;
     private operatorOrder: OperatorOrder;
-    private selectProps: Set<Extract<keyof Required<T>, string>>;
-    private orderByProps: Set<OrderByDescriptor<Required<T>>>;
+    private selectProps: Set<Extract<keyof T, string>>;
+    private orderByProps: Set<OrderByDescriptor<T>>;
     private filterProps: Set<
         CombinedFilter<Required<T>> | QueryFilter<Required<T>>
     >;
@@ -30,8 +30,8 @@ export class OdataQueryBuilder<T> {
         this.countQuery = '';
         this.topCount = 0;
         this.skipCount = 0;
-        this.selectProps = new Set<Extract<keyof Required<T>, string>>();
-        this.orderByProps = new Set<OrderByDescriptor<Required<T>>>();
+        this.selectProps = new Set<Extract<keyof T, string>>();
+        this.orderByProps = new Set<OrderByDescriptor<T>>();
         this.filterProps = new Set<
             CombinedFilter<Required<T>> | QueryFilter<Required<T>>
         >();
@@ -101,7 +101,7 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    expand(...expandFields: ExpandFields<Required<T>>[]): this {
+    expand(...expandFields: ExpandFields<T>[]): this {
         if (expandFields.length === 0) return this;
 
         for (const expand of expandFields) {

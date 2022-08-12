@@ -8,5 +8,5 @@ export type OrderByFields<T> = {
         ? {
               [TK in Extract<keyof T[K], string>]-?: `${K}/${TK}` | K;
           }[Extract<keyof T[K], string>]
-        : never;
+        : K;
 }[Extract<keyof T, string>];

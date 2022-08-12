@@ -36,7 +36,7 @@ export type QueryFilter<T> = { lambdaOperator?: 'any' | 'all' } & (
 );
 
 export type FilterFields<T, VALUETYPE> = {
-    [K in Extract<keyof T, string>]-?: T[K] extends Record<string, unknown>
+    [K in Extract<keyof T, string>]: T[K] extends Record<string, unknown>
         ? T[K] extends VALUETYPE
             ? K
             :
@@ -45,9 +45,11 @@ export type FilterFields<T, VALUETYPE> = {
                         [TK in Extract<
                             keyof T[K],
                             string
-                        >]-?: T[K][TK] extends VALUETYPE ? `${K}/${TK}` : never;
+                        >]: T[K][TK] extends VALUETYPE | null
+                            ? `${K}/${TK}`
+                            : never;
                     }[Extract<keyof T[K], string>]
-        : T[K] extends VALUETYPE
+        : T[K] extends VALUETYPE | null
         ? K
         : T[K] extends readonly VALUETYPE[]
         ? K
