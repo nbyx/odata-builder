@@ -12,6 +12,8 @@ import { CombinedFilter } from './types/filter/combined-filter.type';
 import { isCombinedFilter } from './utils/filter/combined-filter-util';
 import { ExpandFields } from './types/expand/expand-fields.type';
 import { toExpandQuery } from './utils/expand/expand-util';
+import { toTopQuery } from './utils/top/top-utils';
+import { toSkipQuery } from './utils/skip/skip-utils';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -38,19 +40,33 @@ export class OdataQueryBuilder<T> {
         this.expandProps = new Set<ExpandFields<Required<T>>>();
 
         this.operatorOrder = {
-            count: this.getCountQuery.bind(this),
-            filter: this.getFilterQuery.bind(this),
-            top: this.getTopQuery.bind(this),
-            skip: this.getSkipQuery.bind(this),
-            select: this.getSelectQuery.bind(this),
-            expand: this.getExpandQuery.bind(this),
-            orderby: this.getOrderByQuery.bind(this),
+            count: () => this.countQuery,
+            filter: () =>
+                toFilterQuery<Required<T>>.call(
+                    this,
+                    Array.from(this.filterProps.values()),
+                ),
+            top: () => toTopQuery.call(this, this.topCount),
+            skip: () => toSkipQuery.call(this, this.skipCount),
+            select: () =>
+                toSelectQuery.call(this, Array.from(this.selectProps.values())),
+            expand: () =>
+                toExpandQuery<Required<T>>.call(
+                    this,
+                    Array.from(this.expandProps.values()),
+                ),
+            orderby: () =>
+                toOrderByQuery<Required<T>>.call(
+                    this,
+                    Array.from(this.orderByProps.values()),
+                ),
             search: () => '',
         };
     }
 
     top(topCount: number): this {
         if (!topCount || this.topCount) return this;
+        if (topCount < 0) throw new Error('Invalid top count');
 
         this.topCount = topCount;
 
@@ -59,6 +75,7 @@ export class OdataQueryBuilder<T> {
 
     skip(skipCount: number): this {
         if (!skipCount || this.skipCount) return this;
+        if (skipCount < 0) throw new Error('Invalid skip count');
 
         this.skipCount = skipCount;
 
@@ -67,6 +84,8 @@ export class OdataQueryBuilder<T> {
 
     select(...selectProps: Extract<keyof Required<T>, string>[]): this {
         if (selectProps.length === 0) return this;
+        if (selectProps.some(prop => !prop))
+            throw new Error('Invalid select input');
 
         for (const option of selectProps) {
             if (!option) continue;
@@ -86,16 +105,18 @@ export class OdataQueryBuilder<T> {
 
     filter(...filters: unknown[]): this {
         if (filters.length === 0) return this;
+        if (filters.some(filter => !filter))
+            throw new Error('Invalid filter input');
 
         for (const filter of filters) {
-            if (!filter) continue;
-
             if (
-                isQueryFilter<Required<T>>(filter) ||
-                isCombinedFilter<Required<T>>(filter)
+                !isQueryFilter<Required<T>>(filter) &&
+                !isCombinedFilter<Required<T>>(filter)
             ) {
-                this.filterProps.add(filter);
+                throw new Error('Invalid filter');
             }
+
+            this.filterProps.add(filter);
         }
 
         return this;
@@ -103,6 +124,8 @@ export class OdataQueryBuilder<T> {
 
     expand(...expandFields: ExpandFields<T>[]): this {
         if (expandFields.length === 0) return this;
+        if (expandFields.some(field => !field))
+            throw new Error('Field missing for expand');
 
         for (const expand of expandFields) {
             this.expandProps.add(expand);
@@ -130,57 +153,13 @@ export class OdataQueryBuilder<T> {
     }
 
     toQuery(): string {
-        return Object.keys(this.operatorOrder)
+        const query = Object.keys(this.operatorOrder)
             .map(key => this.operatorOrder[key as ODataOperators]())
-            .filter(value => value !== '')
-            .reduce(
-                (prev, curr, index, array) =>
-                    prev +
-                    `${
-                        index === 0 &&
-                        array.length > 0 &&
-                        this.countQuery !== countEntitiesQuery
-                            ? '?'
-                            : ''
-                    }` +
-                    `${prev && index > 0 ? '&' : ''}${curr}`,
-                '',
-            );
-    }
+            .filter(query => query)
+            .join('&');
 
-    private getTopQuery(): string {
-        return this.topCount > 0 ? `$top=${this.topCount}` : '';
-    }
+        if (this.countQuery === countEntitiesQuery) return query;
 
-    private getSkipQuery(): string {
-        return this.skipCount > 0 ? `$skip=${this.skipCount}` : '';
-    }
-
-    private getCountQuery(): string {
-        return this.countQuery;
-    }
-
-    private getSelectQuery(): string {
-        return this.selectProps.size > 0
-            ? toSelectQuery(Array.from(this.selectProps.values()))
-            : '';
-    }
-
-    private getOrderByQuery(): string {
-        return this.orderByProps.size > 0
-            ? toOrderByQuery(Array.from(this.orderByProps.values()))
-            : '';
-    }
-
-    private getFilterQuery(): string {
-        return this.filterProps.size > 0
-            ? toFilterQuery(Array.from(this.filterProps.values()))
-            : '';
-    }
-
-    private getExpandQuery(): string {
-        return this.expandProps.size > 0
-            ? toExpandQuery(Array.from(this.expandProps.values()))
-            : '';
+        return query ? `?${query}` : '';
     }
 }

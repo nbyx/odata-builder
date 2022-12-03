@@ -9,6 +9,8 @@ import { isCombinedFilter } from './combined-filter-util';
 export const toFilterQuery = <T>(
     filters: (QueryFilter<T> | CombinedFilter<T>)[],
 ): string => {
+    if (filters.length === 0) return '';
+
     return filters.reduce(
         (prev, curr, index) =>
             prev +
