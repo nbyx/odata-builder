@@ -105,7 +105,7 @@ export class OdataQueryBuilder<T> {
 
     filter(...filters: unknown[]): this {
         if (filters.length === 0) return this;
-        if (filters.some(filter => !filter))
+        if (filters.some(filter => filter === undefined))
             throw new Error('Invalid filter input');
 
         for (const filter of filters) {

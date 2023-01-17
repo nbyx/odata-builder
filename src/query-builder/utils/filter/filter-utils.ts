@@ -40,6 +40,10 @@ export const getCombinedFilterQuery = <T = string>(
         : '';
 
 export const toQueryFilterQuery = <T>(filter: QueryFilter<T>): string => {
+    if (filter.value === null) {
+        return `${filter.field} ${filter.operator} null`;
+    }
+
     if (
         typeof filter.value === 'string' &&
         ((!isGuidFilter(filter) && !filter.lambdaOperator) ||

@@ -157,4 +157,31 @@ describe('toQueryFilterQuery', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return string wieh null value for combined filter', () => {
+        const expectedResult = '$filter=(x eq null)';
+
+        const filter: CombinedFilter<{ x: null }> = {
+            logic: 'or',
+            filters: [{ field: 'x', operator: 'eq', value: null }],
+        };
+
+        const result = toFilterQuery<{ x: null }>([filter]);
+
+        expect(result).toBe(expectedResult);
+    });
+
+    it('should return string with null value for query filter', () => {
+        const expectedResult = 'x eq null';
+
+        const filter: QueryFilter<{ x: null }> = {
+            field: 'x',
+            operator: 'eq',
+            value: null,
+        };
+
+        const result = toQueryFilterQuery<{ x: null }>(filter);
+
+        expect(result).toBe(expectedResult);
+    });
 });

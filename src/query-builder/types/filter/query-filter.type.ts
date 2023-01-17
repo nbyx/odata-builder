@@ -4,13 +4,13 @@ export type QueryFilter<T> = { lambdaOperator?: 'any' | 'all' } & (
     | {
           field: FilterFields<T, boolean>;
           operator: FilterOperators<boolean>;
-          value: boolean;
+          value: boolean | null;
           innerField?: LambdaFilterFields<T, boolean>;
       }
     | {
           field: FilterFields<T, string>;
           operator: FilterOperators<string>;
-          value: string;
+          value: string | null;
           ignoreCase?: boolean;
           innerField?: LambdaFilterFields<T, string>;
       }
@@ -23,14 +23,14 @@ export type QueryFilter<T> = { lambdaOperator?: 'any' | 'all' } & (
     | {
           field: FilterFields<T, Guid>;
           operator: FilterOperators<Guid>;
-          value: Guid;
+          value: Guid | null;
           removeQuotes?: boolean;
           innerField?: LambdaFilterFields<T, Guid>;
       }
     | {
           field: FilterFields<T, number>;
           operator: FilterOperators<number>;
-          value: number;
+          value: number | null;
           innerField?: LambdaFilterFields<T, number>;
       }
 );
