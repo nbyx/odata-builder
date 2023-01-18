@@ -11,13 +11,11 @@
   "main": "lib/odata-builder.js",
   "scripts": {
     "build": "rollup --config rollup.config.js",
-    "pre-commit": "lint-staged",
     "lint": "eslint --fix src/**",
     "format": "prettier --write --parser typescript '**/*.ts'",
     "generate-changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
     "test": "vitest",
-    "test:cov": "vitest run --coverage",
-    "prepare": "husky install"
+    "test:cov": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
