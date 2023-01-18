@@ -40,9 +40,7 @@ export const getCombinedFilterQuery = <T = string>(
         : '';
 
 export const toQueryFilterQuery = <T>(filter: QueryFilter<T>): string => {
-    if (filter.value === null) {
-        return `${filter.field} ${filter.operator} null`;
-    }
+    if (filter.value === null) return `${filter.field} ${filter.operator} null`;
 
     if (
         typeof filter.value === 'string' &&
@@ -92,6 +90,8 @@ const isGuidFilter = (filter: unknown): filter is GuidFilter => {
     );
 };
 const getStringFilter = <T>(filter: QueryFilter<T>, field: string): string => {
+    if (filter.value === null) return `${field} ${filter.operator} null`;
+
     return isStringFilterFunction(filter.operator)
         ? `${filter.operator}(${
               hasIgnoreCase(filter) ? 'tolower(' : ''
@@ -101,6 +101,8 @@ const getStringFilter = <T>(filter: QueryFilter<T>, field: string): string => {
         : `${field} ${filter.operator} '${filter.value.toString()}'`;
 };
 const getFilterValue = <T>(filter: QueryFilter<T>) => {
+    if (filter.value === null) return 'null';
+
     if (filter.value instanceof Date) return filter.value.toISOString();
 
     return filter.value.toString();
