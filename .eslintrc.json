@@ -21,5 +21,6 @@
         "prettier"
     ],
     "rules": {
+        "@typescript-eslint/array-type": 0
     }
 }

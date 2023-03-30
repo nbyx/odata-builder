@@ -52,6 +52,22 @@ describe('query-builder', () => {
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
+    it('should begin with count when choosing count entities and add a filter', () => {
+        const item = {
+            x: 6,
+            y: 4,
+        };
+
+        const expectedQuery = '/$count?$filter=x eq 6';
+
+        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        queryBuilder
+            .filter({ field: 'x', operator: 'eq', value: 6 })
+            .count(true);
+
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
     it('should add the count operator to the query', () => {
         const expectedQuery = '?$count=true';
 
