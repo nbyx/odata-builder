@@ -81,6 +81,27 @@ describe('toQueryFilterQuery', () => {
         expect(result).toBe(expectedResult);
     });
 
+    it('should return string filter with object in item that is optional', () => {
+        const item: { x: { y?: string; t: string } } = {
+            x: {
+                y: '',
+                t: '',
+            },
+        };
+        const expectedResult = "contains(tolower(x/y), '')";
+
+        const filter: QueryFilter<typeof item> = {
+            field: 'x/y',
+            operator: 'contains',
+            value: '',
+            ignoreCase: true,
+        };
+
+        const result = toQueryFilterQuery<typeof item>(filter);
+
+        expect(result).toBe(expectedResult);
+    });
+
     it('should return filter string with all-lamda for string array', () => {
         const item = {
             x: [''],

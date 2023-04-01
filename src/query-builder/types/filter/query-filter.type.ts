@@ -42,10 +42,9 @@ export type FilterFields<T, VALUETYPE> = {
             :
                   | never
                   | {
-                        [TK in Extract<
-                            keyof T[K],
-                            string
-                        >]: T[K][TK] extends VALUETYPE | null
+                        [TK in Extract<keyof T[K], string>]: NonNullable<
+                            T[K][TK]
+                        > extends VALUETYPE | null
                             ? `${K}/${TK}`
                             : never;
                     }[Extract<keyof T[K], string>]
