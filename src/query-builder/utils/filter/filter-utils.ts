@@ -89,17 +89,36 @@ const isGuidFilter = (filter: unknown): filter is GuidFilter => {
         (filter as GuidFilter).value,
     );
 };
+
+function getFieldValue(field: string, hasIgnoreCase: boolean) {
+    return `${hasIgnoreCase ? 'tolower(' : ''}${field}${
+        hasIgnoreCase ? ')' : ''
+    }`;
+}
+
 const getStringFilter = <T>(filter: QueryFilter<T>, field: string): string => {
     if (filter.value === null) return `${field} ${filter.operator} null`;
 
     return isStringFilterFunction(filter.operator)
-        ? `${filter.operator}(${
-              hasIgnoreCase(filter) ? 'tolower(' : ''
-          }${field}${
-              hasIgnoreCase(filter) ? ')' : ''
-          }, '${filter.value.toString()}')`
-        : `${field} ${filter.operator} '${filter.value.toString()}'`;
+        ? `${filter.operator}(${getFieldValue(
+              field,
+              hasIgnoreCase(filter),
+          )}, '${getStringFilterValue(
+              filter.value.toString(),
+              hasIgnoreCase(filter),
+          )}')`
+        : `${getFieldValue(field, hasIgnoreCase(filter))} ${
+              filter.operator
+          } '${getStringFilterValue(
+              filter.value.toString(),
+              hasIgnoreCase(filter),
+          )}'`;
 };
+
+const getStringFilterValue = (value: string, hasIgnoreCase: boolean) => {
+    return hasIgnoreCase ? value.toLowerCase() : value;
+};
+
 const getFilterValue = <T>(filter: QueryFilter<T>) => {
     if (filter.value === null) return 'null';
 

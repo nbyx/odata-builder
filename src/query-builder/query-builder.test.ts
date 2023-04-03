@@ -162,7 +162,9 @@ describe('query-builder', () => {
                 ? `contains(${filterOption.ignoreCase ? 'tolower(' : ''}${
                       filter.field
                   }${filterOption.ignoreCase ? ')' : ''}, '${filter.value}')`
-                : `${filter.field} ${filter.operator} '${filter.value}'`);
+                : `${filterOption.ignoreCase ? 'tolower(' : ''}${filter.field}${
+                      filterOption.ignoreCase ? ')' : ''
+                  } ${filter.operator} '${filter.value}'`);
 
         const queryBuilder = new OdataQueryBuilder<typeof item>();
         queryBuilder.filter(filter);
