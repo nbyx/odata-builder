@@ -13,6 +13,7 @@ export type QueryFilter<T> = { lambdaOperator?: 'any' | 'all' } & (
           value: string | null;
           ignoreCase?: boolean;
           innerField?: LambdaFilterFields<T, string>;
+          removeQuotes?: boolean;
       }
     | {
           field: FilterFields<T, Date>;

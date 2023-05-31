@@ -7,7 +7,7 @@ import { GuidFilter } from 'src/query-builder/types/utils/util.types';
 import { isCombinedFilter } from './combined-filter-util';
 
 export const toFilterQuery = <T>(
-    filters: (QueryFilter<T> | CombinedFilter<T>)[],
+    filters: Array<QueryFilter<T> | CombinedFilter<T>>,
 ): string => {
     if (filters.length === 0) return '';
 
@@ -25,16 +25,17 @@ export const toFilterQuery = <T>(
 
 export const getCombinedFilterQuery = <T = string>(
     compositeFilter: CombinedFilter<T>,
-) =>
+): string =>
     compositeFilter.filters.length > 0
         ? `(${compositeFilter.filters.reduce(
               (prev, curr, index, array) =>
-                  prev +
+                  prev + (isCombinedFilter<T>(curr) ?
+                  getCombinedFilterQuery<T>(curr) + ` ${compositeFilter.logic} ` :
                   `${toQueryFilterQuery(curr)}${
                       index < array.length - 1
                           ? ` ${compositeFilter.logic} `
                           : ''
-                  }`,
+                  }`),
               '',
           )})`
         : '';
