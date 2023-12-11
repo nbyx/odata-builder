@@ -46,7 +46,6 @@ jobs:
             exit 1
           fi
       - name: Archive build artifacts
-        if: success() && steps.check-dist.outputs.result == 'success'
         uses: actions/upload-artifact@v2
         with:
           name: dist
