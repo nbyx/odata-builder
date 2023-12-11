@@ -1,10 +1,10 @@
 # odata-builder
-Generating odata queries typesafe. No more worries about wrong queries. Know that the query is correct while writing it.
+Generate Typesafe OData Queries with Ease. odata-builder ensures your queries are correct as you write them, eliminating worries about incorrect query formats.
 
-[![Build / Test](https://github.com/nbyx/odata-builder/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/nbyx/odata-builder/actions/workflows/build-and-test.yml)
+[![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
 
 ## Install
-To install the package use your favourite package mananger, e.g.:
+Install odata-builder using your preferred package manager:
 
 ```javascript
 npm install --save odata-builder
@@ -14,6 +14,7 @@ or
 yarn add odata-builder
 ```
 ## Usage
+Effortlessly create queries with typesafe objects:
 ```javascript
 const item = {
     someProperty: 'someValue',
@@ -28,7 +29,8 @@ const queryBuilder = new OdataQueryBuilder<typeof item>()
     .toQuery();
 //  ^ ?$count=true&$filter=someProperty eq 'test'&$skip=10&$top=100&$select=someOtherProperty1, someOtherProperty2
 ```
-If you want to count and only receive the amount of data:
+### Count and Data Retrieval
+For counting and data retrieval:
 
 ```javascript
 const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
@@ -37,9 +39,8 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
     .toQuery();
 //  ^ /$count?$filter=....
 ```
-
-You can also decide if you want to have single quotes when querying with **guid**
-
+### Querying with GUID:
+Decide on the inclusion of single quotes in GUID queries:
 ```javascript
 import { Guid, OdataQueryBuilder } from 'odata-builder';
 
@@ -62,8 +63,8 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 //  ^ ?$filter=id eq some-guid
 
 ```
-
-If there is an array in your item, you can use lambda expressions in oData to filter for them:
+### Lambda Expressions for Array Filtering:
+Utilize lambda expressions for filtering array fields:
 
 ```javascript
 type MyAwesomeDto = {
@@ -84,10 +85,8 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 //  ^ ?$filter=someProperty/any(s: contains(tolower(s), 'test'));
 ```
 
-There is also autocomplete for every property of the filter.
-
-If the inner array ist an array of objects you need to provide the inner field for the filter:
-
+### Filtering Objects in Arrays:
+Filter within arrays of objects:
 ```javascript
 type MyAwesomeDto = {
     ...
@@ -109,7 +108,8 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 
 ```
 
-If you want to choose the filter logic or you need to filter for two depended fields there is the **CombinedFilter**:
+### Combined Filters:
+Combine multiple filters:
 
 ```javascript
  const queryBuilder = new ODataQueryBuilder<MyAwesomeDto>
@@ -123,9 +123,8 @@ If you want to choose the filter logic or you need to filter for two depended fi
     .toQuery();
 //  ^ ?$filter=(x eq test or y eq 5)
 ```
-You could combine it with multiple Combined filters or even with the single QueryFilter.
-
-If you want to add a function to your codebase that encapsulates the query creation you can do it like this:
+### Function Encapsulation:
+Encapsulate query creation:
 
 ```javascript
 const item = {
@@ -149,7 +148,8 @@ const testFn = (
 const result = testFn('y', 'eq', 'test');
 //  ^ ?$filter=y eq 'test'
 ```
-If you need to expand a property you can use the expand function:
+### Property Expansion:
+Expand properties in queries:
 
 ```javascript
 const item = {
@@ -190,4 +190,4 @@ const queryBuilder = new OdataQueryBuilder<typeof item>();
 - [ ] Add search support
 - [ ] Add support for data modification queries with odata 
 
-Any feature missing here? Please open an issue and add your feature request.
+Your contributions are welcome! If there's a feature you'd like to see in odata-builder, or if you encounter any issues, please feel free to open an issue or submit a pull request.

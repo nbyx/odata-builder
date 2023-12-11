@@ -1,4 +1,4 @@
-name: Create odata-builder release
+name: build and test
 
 on:
   push:
