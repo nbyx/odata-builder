@@ -38,7 +38,15 @@ jobs:
           jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
+      - name: Check if dist directory is empty
+        id: check-dist
+        run: |
+          if [ -z "$(ls -A dist/)" ]; then
+            echo "No files found in dist directory, failing the job."
+            exit 1
+          fi
       - name: Archive build artifacts
+        if: success() && steps.check-dist.outputs.result == 'success'
         uses: actions/upload-artifact@v2
         with:
           name: dist
