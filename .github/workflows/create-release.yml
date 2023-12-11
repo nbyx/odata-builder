@@ -30,9 +30,9 @@ jobs:
         run: npm run build
       - name: Prepare package for npm
         run: |
-          cp package.json lib/package.json
-          cp README.md lib/README.md
-          cd lib
+          cp package.json dist/package.json
+          cp README.md dist/README.md
+          cd dist
           jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
