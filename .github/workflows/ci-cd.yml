@@ -1,6 +1,8 @@
 name: Create odata-builder release
 
 on:
+  push:
+  pull_request:
   release:
     types: [created]
   workflow_dispatch:
@@ -43,6 +45,7 @@ jobs:
           path: dist/
 
   request-approval:
+    if: github.event_name == 'release' && github.event.action == 'created'
     needs: [test-and-build]
     runs-on: ubuntu-latest
     environment:
@@ -52,6 +55,7 @@ jobs:
         run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
 
   publish:
+    if: github.event_name == 'release' && github.event.action == 'created'
     needs: request-approval
     runs-on: ubuntu-latest
     steps:
