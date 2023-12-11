@@ -40,24 +40,29 @@ export type FilterFields<T, VALUETYPE> = {
     [K in Extract<keyof T, string>]: T[K] extends Record<string, unknown>
         ? T[K] extends VALUETYPE
             ? K
-            :
-                  | never
-                  | {
-                        [TK in Extract<keyof T[K], string>]: NonNullable<
-                            T[K][TK]
-                        > extends VALUETYPE | null
-                            ? `${K}/${TK}`
-                            : never;
-                    }[Extract<keyof T[K], string>]
-        : T[K] extends VALUETYPE | null
-        ? K
-        : T[K] extends readonly VALUETYPE[]
-        ? K
-        : T[K] extends readonly Record<string, infer INNERVALUE>[]
-        ? INNERVALUE extends VALUETYPE
+            : `${K}/${NestedFilterFields<T[K], VALUETYPE>}`
+        : T[K] extends VALUETYPE | null | undefined
+          ? K
+          : T[K] extends readonly VALUETYPE[]
             ? K
-            : never
-        : never;
+            : T[K] extends readonly Record<string, infer INNERVALUE>[]
+              ? INNERVALUE extends VALUETYPE
+                  ? K
+                  : never
+              : never;
+}[Extract<keyof T, string>];
+
+type NestedFilterFields<T, VALUETYPE> = {
+    [K in keyof T as string]: T[K] extends Record<string, unknown>
+        ? T[K] extends VALUETYPE | null | undefined
+            ? K
+            : `${string & K}/${NestedFilterFields<
+                  Exclude<T[K], undefined>,
+                  VALUETYPE
+              >}`
+        : T[K] extends VALUETYPE | null | undefined
+          ? K
+          : never;
 }[Extract<keyof T, string>];
 
 export type LambdaFilterFields<T, VALUETYPE> = {
@@ -89,10 +94,10 @@ export type MathFilterFunctions = 'round' | 'floor' | 'ceiling';
 export type DependentFilterOperators<VALUETYPE> = VALUETYPE extends string
     ? StringFilterOperators
     : VALUETYPE extends number
-    ? NumberFilterOperators
-    : VALUETYPE extends Date
-    ? DateFilterOperators
-    : never;
+      ? NumberFilterOperators
+      : VALUETYPE extends Date
+        ? DateFilterOperators
+        : never;
 
 export type FilterOperators<VALUETYPE> =
     | GeneralFilterOperators

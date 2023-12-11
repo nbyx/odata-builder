@@ -7,8 +7,8 @@ export const isCombinedFilter = <T>(
     return (
         ((filters as CombinedFilter<T>).logic === 'and' ||
             (filters as CombinedFilter<T>).logic === 'or') &&
-        (filters as CombinedFilter<T>).filters.every(filter =>
-            isQueryFilter(filter) || isCombinedFilter(filter),
+        (filters as CombinedFilter<T>).filters.every(
+            filter => isQueryFilter(filter) || isCombinedFilter(filter),
         )
     );
 };

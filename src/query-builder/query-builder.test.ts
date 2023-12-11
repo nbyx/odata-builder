@@ -193,7 +193,7 @@ describe('query-builder', () => {
         expect(query).toBe(expectedResult);
     });
 
-    it('should add filter if querybuilder is in a function', () => {
+    it('should add filter if query builder is in a function', () => {
         interface MyAwesomeDto {
             y: string;
             x: string;
@@ -201,14 +201,19 @@ describe('query-builder', () => {
         const expectedResult = `?$filter=x eq 76b44f03-bb98-48eb-81fd-63007465a76d`;
 
         const getQuery = (queryPart: string) => {
-
             return new OdataQueryBuilder<MyAwesomeDto>()
-                .filter({ field: 'x', operator: 'eq', value: queryPart, removeQuotes: true })
+                .filter({
+                    field: 'x',
+                    operator: 'eq',
+                    value: queryPart,
+                    removeQuotes: true,
+                })
                 .toQuery();
-        }
+        };
 
-
-        expect(getQuery('76b44f03-bb98-48eb-81fd-63007465a76d')).toBe(expectedResult);
+        expect(getQuery('76b44f03-bb98-48eb-81fd-63007465a76d')).toBe(
+            expectedResult,
+        );
     });
     it('should also filter with optional properties', () => {
         type MyAwesomeDto = { x?: { code: string } } & { y: boolean };
@@ -228,16 +233,14 @@ describe('query-builder', () => {
         };
         const expectedResult = `?$filter=x/any(s: contains(s/y, '1')) and z eq false`;
 
-        const filter = {
-            field: 'x',
-            operator: 'contains',
-            value: '1',
-            lambdaOperator: 'any',
-            innerField: 'y',
-        } as const;
-
         queryBuilder
-            .filter(filter)
+            .filter({
+                field: 'x',
+                operator: 'contains',
+                value: '1',
+                lambdaOperator: 'any',
+                innerField: 'y',
+            })
             .filter({ field: 'z', operator: 'eq', value: false });
 
         expect(queryBuilder.toQuery()).toBe(expectedResult);
@@ -333,11 +336,30 @@ describe('query-builder', () => {
         expect(result).toBe(expectedQuery);
     });
 
+    it('should return a filter string for a deeply nested object', () => {
+        const item = {
+            x: {
+                y: {
+                    z: 'test',
+                },
+            },
+        };
+        const expectedQuery = "?$filter=x/y/z eq 'test'";
+
+        const queryBuilder = new OdataQueryBuilder<typeof item>();
+
+        queryBuilder.filter({ field: 'x/y/z', operator: 'eq', value: 'test' });
+
+        const result = queryBuilder.toQuery();
+
+        expect(result).toBe(expectedQuery);
+    });
+
     it('should return a filter string with combined filter inside of combined filter', () => {
         const item = {
             x: 'test',
             y: 'test1',
-            z: 'test2'
+            z: 'test2',
         };
         const expectedQuery = `?$filter=((x eq 'test' or y eq 'test1') and z eq 'test')`;
 
@@ -350,15 +372,15 @@ describe('query-builder', () => {
                     logic: 'or',
                     filters: [
                         { field: 'x', operator: 'eq', value: 'test' },
-                        { field: 'y', operator: 'eq', value: 'test1' }
+                        { field: 'y', operator: 'eq', value: 'test1' },
                     ],
                 },
-                { field: 'z', operator: 'eq', value: 'test' }
-            ]
+                { field: 'z', operator: 'eq', value: 'test' },
+            ],
         });
 
         const result = queryBuilder.toQuery();
 
         expect(result).toBe(expectedQuery);
-    })
+    });
 });

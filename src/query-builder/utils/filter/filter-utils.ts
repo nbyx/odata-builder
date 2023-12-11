@@ -29,13 +29,15 @@ export const getCombinedFilterQuery = <T = string>(
     compositeFilter.filters.length > 0
         ? `(${compositeFilter.filters.reduce(
               (prev, curr, index, array) =>
-                  prev + (isCombinedFilter<T>(curr) ?
-                  getCombinedFilterQuery<T>(curr) + ` ${compositeFilter.logic} ` :
-                  `${toQueryFilterQuery(curr)}${
-                      index < array.length - 1
-                          ? ` ${compositeFilter.logic} `
-                          : ''
-                  }`),
+                  prev +
+                  (isCombinedFilter<T>(curr)
+                      ? getCombinedFilterQuery<T>(curr) +
+                        ` ${compositeFilter.logic} `
+                      : `${toQueryFilterQuery(curr)}${
+                            index < array.length - 1
+                                ? ` ${compositeFilter.logic} `
+                                : ''
+                        }`),
               '',
           )})`
         : '';

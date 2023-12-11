@@ -67,14 +67,14 @@ describe('toQueryFilterQuery', () => {
         };
         const expectedResult = "x/any(s: contains(tolower(s/y), ''))";
 
-        const filter = {
+        const filter: QueryFilter<typeof item> = {
             field: 'x',
             operator: 'contains',
             value: '',
             lambdaOperator: 'any',
             ignoreCase: true,
             innerField: 'y',
-        } as const;
+        };
 
         const result = toQueryFilterQuery<typeof item>(filter);
 
@@ -108,13 +108,13 @@ describe('toQueryFilterQuery', () => {
         };
         const expectedResult = "x/any(s: contains(tolower(s), ''))";
 
-        const filter = {
+        const filter: QueryFilter<typeof item> = {
             field: 'x',
             operator: 'contains',
             value: '',
             lambdaOperator: 'any',
             ignoreCase: true,
-        } as const;
+        };
 
         const result = toQueryFilterQuery<typeof item>(filter);
 
@@ -182,7 +182,11 @@ describe('toQueryFilterQuery', () => {
     it('should return combined filters with another combined filter in it', () => {
         const expectedResult = `$filter=((x eq 'test' or x eq 'test1') and (y eq 'test2' or y eq 'test3') and z eq 'test4')`;
 
-        interface dto {x: string, y: string, z: string};
+        interface dto {
+            x: string;
+            y: string;
+            z: string;
+        }
 
         const filters: CombinedFilter<dto> = {
             logic: 'and',
@@ -190,25 +194,25 @@ describe('toQueryFilterQuery', () => {
                 {
                     logic: 'or',
                     filters: [
-                        {field: 'x', operator: 'eq', value: 'test'},
-                        {field: 'x', operator: 'eq', value: 'test1'},
-                    ]
+                        { field: 'x', operator: 'eq', value: 'test' },
+                        { field: 'x', operator: 'eq', value: 'test1' },
+                    ],
                 },
                 {
                     logic: 'or',
                     filters: [
-                        {field: 'y', operator: 'eq', value: 'test2'},
-                        {field: 'y', operator: 'eq', value: 'test3'},
-                    ]
+                        { field: 'y', operator: 'eq', value: 'test2' },
+                        { field: 'y', operator: 'eq', value: 'test3' },
+                    ],
                 },
-                {field: 'z', operator: 'eq', value: 'test4'}
-            ]
-        }
+                { field: 'z', operator: 'eq', value: 'test4' },
+            ],
+        };
 
-        const result = toFilterQuery<dto>([filters])
+        const result = toFilterQuery<dto>([filters]);
 
         expect(result).toBe(expectedResult);
-    })
+    });
 
     it('should return string wieh null value for combined filter', () => {
         const expectedResult = '$filter=(x eq null)';

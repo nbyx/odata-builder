@@ -40,34 +40,34 @@ export type FilterString<
           string
       >
     : FILTERSTRING extends `${infer FIELD} ${infer OPERATOR} '${infer VALUE}'`
-    ? VerifyFilter<
-          TYPE,
-          FilterOperators<number | string>,
-          FILTERSTRING,
-          OPERATOR,
-          FIELD,
-          VALUE,
-          string | number
-      >
-    : FILTERSTRING extends `${infer FIELD} ${infer OPERATOR} ${infer VALUE}`
-    ? VerifyFilter<
-          TYPE,
-          FilterOperators<boolean>,
-          FILTERSTRING,
-          OPERATOR,
-          FIELD,
-          VALUE,
-          boolean
-      >
-    : FILTERSTRING extends `${infer OPERATOR}(${infer FIELD}) ${infer SECONDOPERATOR} ${infer VALUE}`
-    ? VerifyFilter<
-          TYPE,
-          DateFilterFunctions | MathFilterFunctions,
-          FILTERSTRING,
-          OPERATOR,
-          FIELD,
-          VALUE,
-          Date | number,
-          SECONDOPERATOR
-      >
-    : never;
+      ? VerifyFilter<
+            TYPE,
+            FilterOperators<number | string>,
+            FILTERSTRING,
+            OPERATOR,
+            FIELD,
+            VALUE,
+            string | number
+        >
+      : FILTERSTRING extends `${infer FIELD} ${infer OPERATOR} ${infer VALUE}`
+        ? VerifyFilter<
+              TYPE,
+              FilterOperators<boolean>,
+              FILTERSTRING,
+              OPERATOR,
+              FIELD,
+              VALUE,
+              boolean
+          >
+        : FILTERSTRING extends `${infer OPERATOR}(${infer FIELD}) ${infer SECONDOPERATOR} ${infer VALUE}`
+          ? VerifyFilter<
+                TYPE,
+                DateFilterFunctions | MathFilterFunctions,
+                FILTERSTRING,
+                OPERATOR,
+                FIELD,
+                VALUE,
+                Date | number,
+                SECONDOPERATOR
+            >
+          : never;
