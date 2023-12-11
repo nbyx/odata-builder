@@ -1,4 +1,4 @@
-export * from './query-builder';
+export { OdataQueryBuilder } from './query-builder/index';
 export type {
     OrderByDescriptor,
     OrderByFields,
