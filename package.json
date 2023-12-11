@@ -8,7 +8,7 @@
     "url": "https://github.com/nbyx/odata-builder/issues"
   },
   "homepage": "https://github.com/nbyx/odata-builder#readme",
-  "main": "lib/odata-builder.js",
+  "main": "dist/odata-builder.js",
   "scripts": {
     "build": "rollup --config rollup.config.js",
     "lint": "eslint --fix src/**",

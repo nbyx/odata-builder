@@ -6,12 +6,12 @@ export default {
   plugins: [typescript(), terser()],
   output: [
     {
-      file: './lib/odata-builder.esm.js',
+      file: './dist/odata-builder.esm.js',
       format: 'esm',
       exports: 'auto'
     },
     {
-      file: './lib/odata-builder.js',
+      file: './dist/odata-builder.js',
       format: 'cjs',
       exports: 'auto'
     },
