@@ -185,9 +185,8 @@ const queryBuilder = new OdataQueryBuilder<typeof item>();
 - [x] Add **select** query
 - [x] Add **orderby** with order direction asc or desc
 - [x] Add single **filter** support with lambda expressions
-- [ ] Add string filter support with typechecking (in progress)
 - [x] Add expand support
-- [ ] Add odata function support (number, Date, string) (partially done)
+- [ ] Add odata function support (partially done)
 - [ ] Add search support
 - [ ] Add support for data modification queries with odata 
 
