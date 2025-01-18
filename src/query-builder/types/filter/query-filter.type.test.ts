@@ -1,4 +1,3 @@
-import { Guid } from 'dist/odata-builder';
 import { describe, it, assertType, expectTypeOf } from 'vitest';
 import {
     QueryFilter,
@@ -6,6 +5,7 @@ import {
     LambdaFilterFields,
     FilterOperators,
 } from './query-filter.type';
+import { Guid } from '../utils/util.types';
 
 describe('QueryFilter<T>', () => {
     it('should allow boolean filter', () => {
