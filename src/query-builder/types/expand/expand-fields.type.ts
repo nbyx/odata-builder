@@ -1,19 +1,16 @@
-export type ExpandFields<T, Depth extends number = 5> = [Depth] extends [never]
+import { HasKeys, PrevDepth } from '../utils/util.types';
+
+export type ExpandFields<T, Depth extends number = 5> = Depth extends 0
     ? never
     : {
-          [K in Extract<keyof T, string>]: NonNullable<T[K]> extends Record<
-              string,
-              unknown
-          >
-              ? K | `${K}/${ExpandFields<NonNullable<T[K]>, PrevDepth<Depth>>}`
+          [K in Extract<keyof T, string>]: NonNullable<T[K]> extends object
+              ? // Check for empty object
+                HasKeys<NonNullable<T[K]>> extends true
+                  ? // If there's at least one key, include `K` and deeper expansions
+                    | K
+                        | (Depth extends 1
+                              ? never
+                              : `${K}/${ExpandFields<NonNullable<T[K]>, PrevDepth<Depth>>}`)
+                  : never
               : never;
       }[Extract<keyof T, string>];
-
-type PrevDepth<T extends number> = [
-    never, // 0
-    0, // 1
-    1, // 2
-    2, // 3
-    3, // 4
-    4, // 5
-][T];

@@ -18,3 +18,14 @@ export interface QueryComponents<T> {
     orderBy?: Set<OrderByDescriptor<T>>;
     expand?: Set<ExpandFields<Required<T>>>;
 }
+
+export type HasKeys<T> = [keyof T] extends [never] ? false : true;
+
+export type PrevDepth<T extends number> = [
+    never, // 0
+    0, // 1
+    1, // 2
+    2, // 3
+    3, // 4
+    4, // 5
+][T];

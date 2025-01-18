@@ -46,6 +46,25 @@ describe('OrderByDescriptor<T>', () => {
             | 'address'
         >();
     });
+
+    it('should allow ordering by deeply nested valid fields', () => {
+        type Item = { details: { address: { street: string } } };
+        const orderBy: OrderByDescriptor<Item> = {
+            field: 'details/address/street',
+            orderDirection: 'asc',
+        };
+        assertType<OrderByDescriptor<Item>>(orderBy);
+    });
+
+    it('should not allow ordering by non-existent deeply nested fields', () => {
+        type Item = { details: { address: { street: string } } };
+        const orderBy: OrderByDescriptor<Item> = {
+            // @ts-expect-error field is not defined
+            field: 'details/address/invalidField',
+            orderDirection: 'asc',
+        };
+        void orderBy;
+    });
 });
 
 describe('OrderByFields<T>', () => {

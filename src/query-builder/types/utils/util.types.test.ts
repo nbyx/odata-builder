@@ -6,6 +6,18 @@ describe('Guid', () => {
         const _guid: Guid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' as Guid;
         assertType<Guid>(_guid);
     });
+
+    it('should accept a valid GUID string', () => {
+        const _guid: Guid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' as Guid;
+        assertType<Guid>(_guid);
+    });
+
+    it('should not accept an invalid GUID string', () => {
+        const _invalidGuid = 'invalid-guid-format';
+        // @ts-expect-error - Should not be assignable to Guid
+        const guid: Guid = _invalidGuid;
+        void guid;
+    });
 });
 
 describe('QueryComponents<T>', () => {
@@ -39,6 +51,20 @@ describe('QueryComponents<T>', () => {
             select: new Set(),
             orderBy: new Set(),
             expand: new Set(),
+        };
+        assertType<QueryComponents<Item>>(components);
+    });
+
+    it('should allow a QueryComponents with all components present', () => {
+        type Item = { name: string; count: number; details: { code: string } };
+        const components: QueryComponents<Item> = {
+            count: '$count=true',
+            filter: new Set([{ field: 'name', operator: 'eq', value: 'test' }]),
+            top: 10,
+            skip: 5,
+            select: new Set(['name']),
+            orderBy: new Set([{ field: 'name', orderDirection: 'asc' }]),
+            expand: new Set(['details']),
         };
         assertType<QueryComponents<Item>>(components);
     });
