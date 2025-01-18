@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { expect, describe, it } from 'vitest';
 import { OdataQueryBuilder } from '.';
 import {
@@ -53,14 +54,14 @@ describe('query-builder', () => {
     });
 
     it('should begin with count when choosing count entities and add a filter', () => {
-        const item = {
-            x: 6,
-            y: 4,
+        type ItemType = {
+            x: 6;
+            y: 4;
         };
 
         const expectedQuery = '/$count?$filter=x eq 6';
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder
             .filter({ field: 'x', operator: 'eq', value: 6 })
             .count(true);
@@ -87,53 +88,53 @@ describe('query-builder', () => {
     });
 
     it('should add select to the query', () => {
-        const item = {
-            x: 6,
-            y: 4,
+        type ItemType = {
+            x: 6;
+            y: 4;
         };
         const expectedQuery = '?$select=x, y';
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.select('x', 'y');
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
     it('should add one select if select is called multiple times', () => {
-        const item = {
-            x: 6,
-            y: 4,
+        type ItemType = {
+            x: 6;
+            y: 4;
         };
         const expectedQuery = '?$select=x, y';
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.select('x').select('y');
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
     it('should add orderby to the query', () => {
-        const item = {
-            a: 1,
-            b: 2,
+        type ItemType = {
+            a: 1;
+            b: 2;
         };
 
         const expectedQuery = '?$orderby=a desc';
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.orderBy({ field: 'a', orderDirection: 'desc' });
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
     it('should add a number filter to the query', () => {
-        const item = {
-            x: 1,
+        type ItemType = {
+            x: 1;
         };
 
         const expectedQuery = '?$filter=x eq 1';
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.filter({ field: 'x', operator: 'eq', value: 1 });
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
@@ -145,8 +146,8 @@ describe('query-builder', () => {
         { operator: 'contains', ignoreCase: true } as const,
         { operator: 'contains', ignoreCase: false } as const,
     ])('should add a string filter to the query', filterOption => {
-        const item = {
-            x: '1',
+        type ItemType = {
+            x: '1';
         };
 
         const filter = {
@@ -166,7 +167,7 @@ describe('query-builder', () => {
                       filterOption.ignoreCase ? ')' : ''
                   } ${filter.operator} '${filter.value}'`);
 
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.filter(filter);
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
@@ -226,10 +227,10 @@ describe('query-builder', () => {
         expect(queryBuilder.toQuery()).toBe(expectedResult);
     });
     it('should add the filter with lambda combined with non lambda filter', () => {
-        const queryBuilder = new OdataQueryBuilder<typeof item>();
-        const item = {
-            x: [{ y: '' }],
-            z: false,
+        const queryBuilder = new OdataQueryBuilder<ItemType>();
+        type ItemType = {
+            x: [{ y: '' }];
+            z: false;
         };
         const expectedResult = `?$filter=x/any(s: contains(s/y, '1')) and z eq false`;
 

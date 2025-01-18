@@ -52,18 +52,19 @@ export type FilterFields<T, VALUETYPE> = {
               : never;
 }[Extract<keyof T, string>];
 
-type NestedFilterFields<T, VALUETYPE> = {
-    [K in keyof T as string]: T[K] extends Record<string, unknown>
-        ? T[K] extends VALUETYPE | null | undefined
-            ? K
-            : `${string & K}/${NestedFilterFields<
-                  Exclude<T[K], undefined>,
-                  VALUETYPE
-              >}`
-        : T[K] extends VALUETYPE | null | undefined
-          ? K
-          : never;
-}[Extract<keyof T, string>];
+type NestedFilterFieldsHelper<T, VALUETYPE> =
+    T extends Record<string, unknown>
+    ? {
+          [K in keyof T & string]:
+              T[K] extends VALUETYPE | null | undefined
+                  ? K
+                  : T[K] extends Record<string, unknown>
+                      ? `${K}/${NestedFilterFieldsHelper<Exclude<T[K], undefined>, VALUETYPE>}` extends `${infer P}` ? P : never
+                      : never;
+      }[keyof T & string]
+    : never;
+
+export type NestedFilterFields<T, VALUETYPE> = NestedFilterFieldsHelper<T, VALUETYPE>;
 
 export type LambdaFilterFields<T, VALUETYPE> = {
     [K in Extract<keyof T, string>]-?: T[K] extends readonly (infer TYPE)[]

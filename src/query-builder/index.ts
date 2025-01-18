@@ -53,7 +53,7 @@ export class OdataQueryBuilder<T> {
         >
     ): this {
         if (filters.length === 0) return this;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+         
         if (filters.some(filter => !filter))
             throw new Error('Invalid filter input');
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
 import { describe, expect, it } from 'vitest';
 import { isQueryFilter } from './is-query-filter-util';

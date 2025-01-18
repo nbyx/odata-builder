@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
 import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
 import { Guid } from 'src/query-builder/types/utils/util.types';
