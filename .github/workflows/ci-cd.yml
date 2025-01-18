@@ -1,77 +1,77 @@
 name: build and test
 
 on:
-  push:
-  pull_request:
-  release:
-    types: [created]
-  workflow_dispatch:
+    push:
+    pull_request:
+    release:
+        types: [created]
+    workflow_dispatch:
 
 jobs:
-  test-and-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: npm ci
-      - name: Test
-        run: npm test
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
-      - name: Prepare package for npm
-        run: |
-          cp package.json dist/package.json
-          cp README.md dist/README.md
-          cd dist
-          jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
-          jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
-          jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
-      - name: Check if dist directory is empty
-        id: check-dist
-        run: |
-          if [ -z "$(ls -A dist/)" ]; then
-            echo "No files found in dist directory, failing the job."
-            exit 1
-          fi
-      - name: Archive build artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: dist/
+    test-and-build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Use Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: '20'
+            - name: Install dependencies
+              run: npm ci
+            - name: Test
+              run: npm test
+            - name: Lint
+              run: npm run lint
+            - name: Build
+              run: npm run build
+            - name: Prepare package for npm
+              run: |
+                  cp package.json dist/package.json
+                  cp README.md dist/README.md
+                  cd dist
+                  jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
+                  jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
+                  jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
+            - name: Check if dist directory is empty
+              id: check-dist
+              run: |
+                  if [ -z "$(ls -A dist/)" ]; then
+                    echo "No files found in dist directory, failing the job."
+                    exit 1
+                  fi
+            - name: Archive build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: dist-${{ github.run_id }}
+                  path: dist/
 
-  request-approval:
-    if: github.event_name == 'release' && github.event.action == 'created'
-    needs: [test-and-build]
-    runs-on: ubuntu-latest
-    environment:
-      name: 'production'
-    steps:
-      - name: Request Approval
-        run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
+    request-approval:
+        if: github.event_name == 'release' && github.event.action == 'created'
+        needs: [test-and-build]
+        runs-on: ubuntu-latest
+        environment:
+            name: 'production'
+        steps:
+            - name: Request Approval
+              run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
 
-  publish:
-    if: github.event_name == 'release' && github.event.action == 'created'
-    needs: request-approval
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: dist
-          path: dist
-      - name: Use Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-      - name: Publish to NPM
-        run: cd dist && npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    publish:
+        if: github.event_name == 'release' && github.event.action == 'created'
+        needs: request-approval
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Download build artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: dist-*
+                  path: dist
+            - name: Use Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: '20'
+                  registry-url: 'https://registry.npmjs.org'
+            - name: Publish to NPM
+              run: cd dist && npm publish
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
