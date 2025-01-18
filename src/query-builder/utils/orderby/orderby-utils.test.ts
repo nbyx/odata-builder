@@ -29,4 +29,9 @@ describe('toOrderByQuery', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return an empty string for an empty array of orderBy descriptors', () => {
+        const result = toOrderByQuery([]);
+        expect(result).toBe('');
+    });
 });

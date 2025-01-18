@@ -19,4 +19,26 @@ describe('toSelectQuery', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return an empty string for an empty array of select properties', () => {
+        const result = toSelectQuery([]);
+        expect(result).toBe('');
+    });
+    // TODO HANDLE THIS CASE! MAYBE '' as return
+    it('should handle null in select properties (though the type should prevent this)', () => {
+        // @ts-expect-error null is not allowed
+        const result = toSelectQuery([null]);
+        expect(result).toBe('$select='); // Or handle this case differently
+    });
+
+    it('should handle undefined in select properties (though the type should prevent this)', () => {
+        // @ts-expect-error undefined is not allowed
+        const result = toSelectQuery([undefined]);
+        expect(result).toBe('$select='); // Or handle this case differently
+    });
+
+    it('should handle empty strings in select properties', () => {
+        const result = toSelectQuery(['']);
+        expect(result).toBe('$select=');
+    });
 });

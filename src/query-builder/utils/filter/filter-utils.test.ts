@@ -241,4 +241,9 @@ describe('toQueryFilterQuery', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return empty string for toFilterQuery with empty array', () => {
+        const result = toFilterQuery<{ x: boolean }>([]);
+        expect(result).toEqual('');
+    });
 });

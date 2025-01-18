@@ -4,8 +4,10 @@ import { OdataQueryBuilder } from '.';
 import {
     FilterFields,
     FilterOperators,
+    QueryFilter,
 } from './types/filter/query-filter.type';
 import { Guid } from './types/utils/util.types';
+import { OrderByDescriptor } from './types/orderby/orderby-descriptor.type';
 
 describe('query-builder', () => {
     it('should return an empty string if toQuery is called without function', () => {
@@ -383,5 +385,152 @@ describe('query-builder', () => {
         const result = queryBuilder.toQuery();
 
         expect(result).toBe(expectedQuery);
+    });
+
+    it('should enforce correct types for filter', () => {
+        type Item = { name: string; count: number };
+        const builder = new OdataQueryBuilder<Item>();
+        builder.filter({ field: 'name', operator: 'eq', value: 'test' });
+        builder.filter({ field: 'count', operator: 'gt', value: 5 });
+        // @ts-expect-error name is of type string
+        builder.filter({ field: 'name', operator: 'eq', value: 5 });
+        // @ts-expect-error count is of type number
+        builder.filter({ field: 'count', operator: 'eq', value: 'test' });
+    });
+
+    it('should enforce correct types for select', () => {
+        type Item = { name: string; count: number };
+        const builder = new OdataQueryBuilder<Item>();
+        builder.select('name', 'count');
+        // @ts-expect-error field does not exist
+        builder.select('invalidField');
+    });
+
+    it('should enforce correct types for orderBy', () => {
+        type Item = { name: string; count: number };
+        const builder = new OdataQueryBuilder<Item>();
+        builder.orderBy({ field: 'name', orderDirection: 'asc' });
+        builder.orderBy({ field: 'count', orderDirection: 'desc' });
+        // @ts-expect-error field does not exist
+        builder.orderBy({ field: 'invalidField', orderDirection: 'asc' });
+    });
+
+    it('should enforce correct types for expand', () => {
+        type Item = { details: { code: string } };
+        const builder = new OdataQueryBuilder<Item>();
+        builder.expand('details');
+        // @ts-expect-error field does not exist
+        builder.expand('invalidField');
+    });
+
+    it('should throw an error if select is called with null or undefined', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.select(null)).toThrowError(
+            'Invalid select input',
+        );
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.select(undefined)).toThrowError(
+            'Invalid select input',
+        );
+    });
+
+    it('should throw an error if filter is called with null or undefined', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.filter(null)).toThrowError(
+            'Invalid filter input',
+        );
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.filter(undefined)).toThrowError(
+            'Invalid filter input',
+        );
+    });
+
+    it('should throw an error if expand is called with null or undefined', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.expand(null)).toThrowError(
+            'Field missing for expand',
+        );
+        //@ts-expect-error value is not allowed
+        expect(() => queryBuilder.expand(undefined)).toThrowError(
+            'Field missing for expand',
+        );
+    });
+
+    it('should throw an error if orderBy is called with an empty array', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        expect(() => queryBuilder.orderBy()).not.toThrowError();
+    });
+
+    it('should handle all query parameters together', () => {
+        type ItemType = {
+            id: Guid;
+            name: string;
+            age: number;
+            isActive: boolean;
+            details: { code: string };
+            tags: string[];
+        };
+        const expectedQuery =
+            "?$count=true&$filter=isActive eq true and tags/any(s: contains(tolower(s), 'test'))&$top=50&$skip=5&$select=name, age&$expand=details&$orderby=age desc";
+        const queryBuilder = new OdataQueryBuilder<ItemType>()
+            .count()
+            .filter({ field: 'isActive', operator: 'eq', value: true })
+            .filter({
+                field: 'tags',
+                operator: 'contains',
+                value: 'test',
+                lambdaOperator: 'any',
+                ignoreCase: true,
+            })
+            .top(50)
+            .skip(5)
+            .select('name', 'age')
+            .expand('details')
+            .orderBy({ field: 'age', orderDirection: 'desc' });
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    // Add tests for FilterString if you plan to implement it
+
+    it('should throw an error for negative top count in top() method', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        expect(() => queryBuilder.top(-1)).toThrowError('Invalid top count');
+    });
+
+    it('should throw an error for negative skip count in skip() method', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        expect(() => queryBuilder.skip(-1)).toThrowError('Invalid skip count');
+    });
+
+    it('should produce the same query regardless of the order of method calls', () => {
+        type ItemType = { id: number; name: string };
+        const filter: QueryFilter<ItemType> = {
+            field: 'id',
+            operator: 'eq',
+            value: 1,
+        };
+        const orderBy: OrderByDescriptor<ItemType> = {
+            field: 'name',
+            orderDirection: 'asc',
+        };
+        const select = 'name';
+
+        const builder1 = new OdataQueryBuilder<ItemType>()
+            .filter(filter)
+            .orderBy(orderBy)
+            .select(select);
+
+        const builder2 = new OdataQueryBuilder<ItemType>()
+            .orderBy(orderBy)
+            .select(select)
+            .filter(filter);
+
+        expect(builder1.toQuery()).toBe(builder2.toQuery());
+        expect(builder1.toQuery()).toBe(
+            '?$filter=id eq 1&$select=name&$orderby=name asc',
+        );
     });
 });

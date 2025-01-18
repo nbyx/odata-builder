@@ -54,23 +54,30 @@ export type FilterFields<T, VALUETYPE> = {
 
 type NestedFilterFieldsHelper<T, VALUETYPE> =
     T extends Record<string, unknown>
-    ? {
-          [K in keyof T & string]:
-              T[K] extends VALUETYPE | null | undefined
+        ? {
+              [K in keyof T & string]: T[K] extends VALUETYPE | null | undefined
                   ? K
                   : T[K] extends Record<string, unknown>
-                      ? `${K}/${NestedFilterFieldsHelper<Exclude<T[K], undefined>, VALUETYPE>}` extends `${infer P}` ? P : never
-                      : never;
-      }[keyof T & string]
-    : never;
+                    ? `${K}/${NestedFilterFieldsHelper<Exclude<T[K], undefined>, VALUETYPE>}` extends `${infer P}`
+                        ? P
+                        : never
+                    : never;
+          }[keyof T & string]
+        : never;
 
-export type NestedFilterFields<T, VALUETYPE> = NestedFilterFieldsHelper<T, VALUETYPE>;
-
+export type NestedFilterFields<T, VALUETYPE> = NestedFilterFieldsHelper<
+    T,
+    VALUETYPE
+>;
 export type LambdaFilterFields<T, VALUETYPE> = {
-    [K in Extract<keyof T, string>]-?: T[K] extends readonly (infer TYPE)[]
-        ? TYPE extends VALUETYPE
-            ? never
-            : keyof TYPE
+    [K in Extract<keyof T, string>]: T[K] extends readonly (infer TYPE)[]
+        ? TYPE extends object // Nur Arrays von Objekten
+            ? {
+                  [Key in keyof TYPE]: TYPE[Key] extends VALUETYPE
+                      ? Key
+                      : never;
+              }[keyof TYPE] // Extrahiere nur Felder mit VALUETYPE
+            : never
         : never;
 }[Extract<keyof T, string>];
 

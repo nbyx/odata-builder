@@ -26,4 +26,12 @@ describe('expand-util', () => {
 
         expect(result).toBe(expectedResult);
     });
+
+    it('should return an empty string for an empty array of expand properties', () => {
+        const item = {
+            x: { someProperty: '' },
+        };
+        const result = toExpandQuery<typeof item>([]);
+        expect(result).toBe('');
+    });
 });
