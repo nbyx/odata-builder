@@ -1,37 +1,201 @@
-name: CI/CD Workflow
+name: Workflow
 
 on:
     push:
         tags:
-            - 'v*' # Nur bei Tag-Pushes (z. B. v0.6.1)
+            - 'v*'
         branches:
-            - '**' # Für Tests und Builds bei jedem Push
-    pull_request: # Für Tests und Builds bei Pull Requests
-    workflow_dispatch: # Manueller Start möglich
+            - '**'
+    pull_request:
+        branches:
+            - '**'
+    workflow_dispatch:
 
 jobs:
-    test-and-build:
+    pr-checks:
+        if: ${{ github.event_name == 'pull_request' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
 
-            - name: Use Node.js
+            - name: Check branch name
+              run: |
+                  BRANCH_NAME=${GITHUB_REF#refs/heads/}
+                  if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix)/.+$ ]]; then
+                    echo "Branch name must follow the pattern 'feature/*', 'bugfix/*', or 'hotfix/*'."
+                    exit 1
+                  fi
+              env:
+                  GITHUB_REF: ${{ github.ref }}
+
+            - name: Check for tags in PR
+              run: |
+                  echo "Checking for tags on all commits in the PR..."
+                  git fetch --tags
+                  for COMMIT in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.sha }}); do
+                    if git tag --points-at $COMMIT | grep .; then
+                      echo "Tag found on commit $COMMIT. Tags are not allowed in PRs."
+                      exit 1
+                    fi
+                  done
+                  echo "No tags found on any commits in the PR."
+
+            - name: Check for required labels
+              run: |
+                  echo "Checking for 'ready-for-review' label..."
+                  curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                    https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | \
+                    jq '.labels[].name' | grep -q "ready-for-review" || \
+                    (echo "PR must have the 'ready-for-review' label." && exit 1)
+
+    check-secrets:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Verify required secrets
+              run: |
+                  echo "Verifying required secrets..."
+                  REQUIRED_SECRETS=("GITHUB_TOKEN" "NPM_TOKEN")
+                  for SECRET in "${REQUIRED_SECRETS[@]}"; do
+                    if [ -z "${!SECRET}" ]; then
+                      echo "Error: Required secret $SECRET is not set."
+                      exit 1
+                    fi
+                  done
+                  echo "All required secrets are set."
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+              shell: bash
+
+    test:
+        needs: check-secrets
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [18, 20]
+        steps:
+            - uses: actions/checkout@v3
+            - name: Set up Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+            - name: Cache Node.js modules
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-${{ matrix.node-version }}-
+            - name: Install dependencies
+              run: npm ci
+            - name: Run tests with verbose output
+              id: run-tests
+              run: npm run test -- --reporter=verbose --coverage | tee full-test-output.txt
+            - name: Filter and post test results to PR
+              if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                  # Filter relevant test results and coverage report
+                  awk '
+                  /^ *Tests|^ *Test Files|^ *Start at|^ *Duration/ {print}
+                  /^% Coverage report from/ {print; cov=1; next}
+                  cov && /^[^-]*$/ {print}
+                  cov && /^$/ {cov=0}
+                  ' full-test-output.txt > filtered-test-output.txt
+            - name: Post filtered test results to PR
+              if: ${{ github.event_name == 'pull_request' }}
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  header: Test Results
+                  message: |
+                      Node.js Version: ${{ matrix.node-version }}
+                      ```shell
+                      $(cat filtered-test-output.txt)
+                      ```
+            - name: Upload full test output as artifact
+              if: ${{ github.event_name == 'pull_request' }}
+              uses: actions/upload-artifact@v3
+              with:
+                  name: full-test-output-${{ matrix.node-version }}.txt
+                  path: full-test-output.txt
+
+    lint:
+        needs: check-secrets
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [18, 20]
+        steps:
+            - uses: actions/checkout@v3
+            - name: Set up Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+            - name: Cache Node.js modules
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-${{ matrix.node-version }}-
+            - name: Install dependencies
+              run: npm ci
+            - name: Lint code
+              run: npm run lint
+            - name: PR Comment with Lint Results
+              if: ${{ github.event_name == 'pull_request' }}
+              uses: reviewdog/action-eslint@v1
+              with:
+                  reporter: github-pr-review
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+    audit:
+        needs: check-secrets
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Set up Node.js 20
               uses: actions/setup-node@v3
               with:
                   node-version: '20'
-
+            - name: Cache Node.js modules
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-
             - name: Install dependencies
               run: npm ci
+            - name: Audit dependencies
+              run: npm audit --production
 
-            - name: Test
-              run: npm test
-
-            - name: Lint
-              run: npm run lint
-
+    build:
+        needs: [test, lint, audit]
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Set up Node.js 20
+              uses: actions/setup-node@v3
+              with:
+                  node-version: '20'
+            - name: Cache Node.js modules
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-
+            - name: Cache build outputs
+              uses: actions/cache@v3
+              with:
+                  path: dist/
+                  key: ${{ runner.os }}-dist-${{ github.sha }}
+                  restore-keys: |
+                      ${{ runner.os }}-dist-
+            - name: Install dependencies
+              run: npm ci
             - name: Build
               run: npm run build
-
             - name: Prepare package for npm
               run: |
                   cp package.json dist/package.json
@@ -52,22 +216,29 @@ jobs:
             - name: Archive build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: dist-${{ github.run_id }}
+                  name: dist-${{ github.run_id }}-${{ github.ref_name }}
                   path: dist/
 
     create-release:
-        needs: [test-and-build]
-        if: startsWith(github.ref, 'refs/tags/')
+        needs: [build]
+        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-
+            - name: Check version consistency
+              run: |
+                  PACKAGE_VERSION=$(jq -r .version package.json)
+                  TAG_VERSION=${GITHUB_REF#refs/tags/v}
+                  if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+                    echo "Version mismatch: package.json ($PACKAGE_VERSION) != tag ($TAG_VERSION)"
+                    exit 1
+                  fi
+              env:
+                  GITHUB_REF: ${{ github.ref }}
             - name: Generate release notes
-              id: release-notes
               run: |
                   PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
                   git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" > release-notes.md
-
             - name: Create GitHub Release
               uses: actions/create-release@v1
               with:
@@ -77,7 +248,6 @@ jobs:
                   draft: false
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     request-approval:
         needs: [create-release]
         runs-on: ubuntu-latest
@@ -87,26 +257,23 @@ jobs:
             - name: Wait for approval
               run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
 
-    # Veröffentlichung auf npm
     publish:
-        needs: [request-approval]
+        needs: [create-release]
+        if: github.base_ref == 'main'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-
             - name: Download build artifacts
               uses: actions/download-artifact@v4
               with:
-                  pattern: dist-*
-                  path: dist/
-
+                  name: dist-${{ github.run_id }}-${{ github.ref_name }}
+                  path: dist
             - name: Use Node.js
               uses: actions/setup-node@v3
               with:
                   node-version: '20'
                   registry-url: 'https://registry.npmjs.org'
-
             - name: Publish to NPM
-              run: cd dist && npm publish
+              run: cd dist && npm publish --access public
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
