@@ -21,7 +21,7 @@ jobs:
               if: ${{ github.event_name == 'pull_request' }}
               run: |
                   BRANCH_NAME=${{ github.event.pull_request.head.ref }}
-                  if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix)/.+$ ]]; then
+                  if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix|dependabot)/.+$ ]]; then
                     echo "Branch name must follow the pattern 'feature/*', 'bugfix/*', or 'hotfix/*'."
                     exit 1
                   fi
