@@ -40,11 +40,11 @@ jobs:
 
             - name: Check for required labels
               run: |
-                  echo "Checking for 'ready-for-review' label..."
+                  echo "Checking for required labels ('ready-for-review' or 'dependencies')..."
                   curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                     https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | \
-                    jq '.labels[].name' | grep -q "ready-for-review" || \
-                    (echo "PR must have the 'ready-for-review' label." && exit 1)
+                    jq '.labels[].name' | grep -qE "(ready-for-review|dependencies)" || \
+                    (echo "PR must have either the 'ready-for-review' or 'dependencies' label." && exit 1)
 
     check-secrets:
         runs-on: ubuntu-latest
