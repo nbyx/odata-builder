@@ -17,16 +17,14 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-
             - name: Check branch name
+              if: ${{ github.event_name == 'pull_request' }}
               run: |
-                  BRANCH_NAME=${GITHUB_REF#refs/heads/}
+                  BRANCH_NAME=${{ github.event.pull_request.head.ref }}
                   if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix)/.+$ ]]; then
                     echo "Branch name must follow the pattern 'feature/*', 'bugfix/*', or 'hotfix/*'."
                     exit 1
                   fi
-              env:
-                  GITHUB_REF: ${{ github.ref }}
 
             - name: Check for tags in PR
               run: |
@@ -91,7 +89,8 @@ jobs:
             - name: Run tests with verbose output
               id: run-tests
               run: npm run test -- --reporter=verbose --coverage | tee full-test-output.txt
-            - name: Filter and post test results to PR
+
+            - name: Filter relevant test results
               if: ${{ github.event_name == 'pull_request' }}
               run: |
                   # Filter relevant test results and coverage report
@@ -101,6 +100,12 @@ jobs:
                   cov && /^[^-]*$/ {print}
                   cov && /^$/ {cov=0}
                   ' full-test-output.txt > filtered-test-output.txt
+              shell: bash
+
+            - name: Set filtered test results to environment variable
+              if: ${{ github.event_name == 'pull_request' }}
+              run: echo "FILTERED_RESULTS=$(cat filtered-test-output.txt)" >> $GITHUB_ENV
+
             - name: Post filtered test results to PR
               if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
@@ -109,8 +114,9 @@ jobs:
                   message: |
                       Node.js Version: ${{ matrix.node-version }}
                       ```shell
-                      $(cat filtered-test-output.txt)
+                      ${{ env.FILTERED_RESULTS }}
                       ```
+
             - name: Upload full test output as artifact
               if: ${{ github.event_name == 'pull_request' }}
               uses: actions/upload-artifact@v3
