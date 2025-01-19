@@ -49,6 +49,13 @@ jobs:
     check-secrets:
         runs-on: ubuntu-latest
         steps:
+            - name: Skip for Dependabot
+              run: |
+                  if [[ "$GITHUB_ACTOR" == "dependabot[bot]" ]]; then
+                    echo "Skipping secret verification for Dependabot."
+                    exit 0
+                  fi
+
             - name: Verify required secrets
               run: |
                   echo "Verifying required secrets..."
