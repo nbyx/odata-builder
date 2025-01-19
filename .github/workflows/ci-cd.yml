@@ -219,10 +219,14 @@ jobs:
                     exit 1
                   fi
 
+            - name: Sanitize ref name
+              run: |
+                  echo "SANITIZED_REF_NAME=${GITHUB_REF_NAME//\//_}" >> $GITHUB_ENV
+
             - name: Archive build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: dist-${{ github.run_id }}-${{ github.ref_name }}
+                  name: dist-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}
                   path: dist/
 
     create-release:
