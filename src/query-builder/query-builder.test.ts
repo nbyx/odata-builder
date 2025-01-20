@@ -8,6 +8,8 @@ import {
 } from './types/filter/query-filter.type';
 import { Guid } from './types/utils/util.types';
 import { OrderByDescriptor } from './types/orderby/orderby-descriptor.type';
+import { SearchExpressionBuilder } from './builder/search-expression-builder';
+import { SearchExpressionPart } from './types/search/search-expression.type';
 
 describe('query-builder', () => {
     it('should return an empty string if toQuery is called without function', () => {
@@ -474,7 +476,7 @@ describe('query-builder', () => {
             tags: string[];
         };
         const expectedQuery =
-            "?$count=true&$filter=isActive eq true and tags/any(s: contains(tolower(s), 'test'))&$top=50&$skip=5&$select=name, age&$expand=details&$orderby=age desc";
+            "?$count=true&$filter=isActive eq true and tags/any(s: contains(tolower(s), 'test'))&$top=50&$skip=5&$select=name, age&$expand=details&$orderby=age desc&$search=test%20search";
         const queryBuilder = new OdataQueryBuilder<ItemType>()
             .count()
             .filter({ field: 'isActive', operator: 'eq', value: true })
@@ -489,7 +491,8 @@ describe('query-builder', () => {
             .skip(5)
             .select('name', 'age')
             .expand('details')
-            .orderBy({ field: 'age', orderDirection: 'desc' });
+            .orderBy({ field: 'age', orderDirection: 'desc' })
+            .search('test search');
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
@@ -532,5 +535,221 @@ describe('query-builder', () => {
         expect(builder1.toQuery()).toBe(
             '?$filter=id eq 1&$select=name&$orderby=name asc',
         );
+    });
+
+    it('should add a search term using SearchExpressionBuilder', () => {
+        const expectedQuery = `?$search=product`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().term('product'),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should add a search phrase using SearchExpressionBuilder', () => {
+        const expectedQuery = `?$search=%22large%20product%22`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().phrase('large product'),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should combine terms and operators using SearchExpressionBuilder', () => {
+        const expectedQuery = `?$search=red%20AND%20blue`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().term('red').and().term('blue'),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should handle NOT operator using SearchExpressionBuilder', () => {
+        const expectedQuery = `?$search=(NOT%20blue)`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().not(
+                new SearchExpressionBuilder().term('blue'),
+            ),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should handle grouping using SearchExpressionBuilder', () => {
+        const expectedQuery = `?$search=(red%20OR%20blue)%20AND%20large`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder()
+                .group(
+                    new SearchExpressionBuilder().term('red').or().term('blue'),
+                )
+                .and()
+                .term('large'),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should combine SearchExpressionBuilder with other query parameters', () => {
+        const expectedQuery = `?$top=10&$search=product`;
+        const queryBuilder = new OdataQueryBuilder()
+            .search(new SearchExpressionBuilder().term('product'))
+            .top(10);
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should allow setting search using a raw string as before', () => {
+        const expectedQuery = `?$search=rawSearchString`;
+        const queryBuilder = new OdataQueryBuilder().search('rawSearchString');
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should prefer SearchExpressionBuilder when both string and builder are used (last call wins)', () => {
+        const expectedQuery = `?$search=builderSearch`;
+        const queryBuilder = new OdataQueryBuilder()
+            .search('stringSearch')
+            .search(new SearchExpressionBuilder().term('builderSearch'));
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should handle clearing the search term with null or undefined', () => {
+        const queryBuilder1 = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().term('test'),
+        );
+        queryBuilder1.search(undefined as unknown as string);
+        expect(queryBuilder1.toQuery()).toBe('');
+
+        const queryBuilder2 = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().term('test'),
+        );
+        queryBuilder2.search(null as unknown as string);
+        expect(queryBuilder2.toQuery()).toBe('');
+    });
+
+    it('should handle a complex nested search expression', () => {
+        const expectedQuery = `?$search=(red%20AND%20(blue%20OR%20(NOT%20yellow)))%20AND%20large`;
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder()
+                .group(
+                    new SearchExpressionBuilder()
+                        .term('red')
+                        .and()
+                        .group(
+                            new SearchExpressionBuilder()
+                                .term('blue')
+                                .or()
+                                .not(
+                                    new SearchExpressionBuilder().term(
+                                        'yellow',
+                                    ),
+                                ),
+                        ),
+                )
+                .and()
+                .term('large'),
+        );
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should handle empty SearchExpressionBuilder gracefully', () => {
+        const builder = new SearchExpressionBuilder();
+        expect(builder.toString()).toBe('');
+    });
+
+    it('should throw an error for invalid term', () => {
+        expect(() => new SearchExpressionBuilder().term('')).toThrowError();
+    });
+
+    it('should handle deeply nested expressions', () => {
+        const builder = new SearchExpressionBuilder()
+            .group(
+                new SearchExpressionBuilder()
+                    .term('red')
+                    .and()
+                    .group(
+                        new SearchExpressionBuilder()
+                            .term('blue')
+                            .or()
+                            .not(new SearchExpressionBuilder().term('yellow')),
+                    ),
+            )
+            .and()
+            .term('green');
+
+        expect(builder.toString()).toBe(
+            '(red AND (blue OR (NOT yellow))) AND green',
+        );
+    });
+
+    it('should handle empty or undefined search input gracefully', () => {
+        const queryBuilder = new OdataQueryBuilder();
+        queryBuilder.search('');
+        expect(queryBuilder.toQuery()).toBe('');
+
+        queryBuilder.search(undefined as unknown as string);
+        expect(queryBuilder.toQuery()).toBe('');
+    });
+
+    it('should combine search with multiple query parameters', () => {
+        const expectedQuery =
+            '?$filter=isActive eq true&$top=10&$search=test%20search';
+
+        const queryBuilder = new OdataQueryBuilder<{ isActive: boolean }>()
+            .filter({ field: 'isActive', operator: 'eq', value: true })
+            .top(10)
+            .search('test search');
+
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should handle complex search expressions with other query parameters', () => {
+        const expectedQuery =
+            '?$filter=isActive eq true&$orderby=name asc&$search=(red%20AND%20blue)%20OR%20yellow';
+
+        const queryBuilder = new OdataQueryBuilder<{
+            isActive: boolean;
+            name: string;
+        }>()
+            .filter({ field: 'isActive', operator: 'eq', value: true })
+            .orderBy({ field: 'name', orderDirection: 'asc' })
+            .search(
+                new SearchExpressionBuilder()
+                    .group(
+                        new SearchExpressionBuilder()
+                            .term('red')
+                            .and()
+                            .term('blue'),
+                    )
+                    .or()
+                    .term('yellow'),
+            );
+
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should throw an error for invalid search expressions', () => {
+        const invalidPart = { invalidKey: 'invalidValue' };
+
+        const builder = new SearchExpressionBuilder([
+            invalidPart as unknown as SearchExpressionPart,
+        ]);
+
+        expect(() => builder.toString()).toThrowError(
+            `Unsupported SearchExpressionPart: ${JSON.stringify(invalidPart)}`,
+        );
+    });
+
+    it('should handle special characters in search terms', () => {
+        const expectedQuery = `?$search=%22special%20%26%20characters%22`;
+
+        const queryBuilder = new OdataQueryBuilder().search(
+            new SearchExpressionBuilder().phrase('special & characters'),
+        );
+
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
+    });
+
+    it('should prioritize the last search input', () => {
+        const expectedQuery = `?$search=finalSearch`;
+
+        const queryBuilder = new OdataQueryBuilder()
+            .search('initialSearch')
+            .search('finalSearch');
+
+        expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 });

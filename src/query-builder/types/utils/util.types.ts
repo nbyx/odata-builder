@@ -17,6 +17,7 @@ export interface QueryComponents<T> {
     select?: Set<Extract<keyof T, string>>;
     orderBy?: Set<OrderByDescriptor<T>>;
     expand?: Set<ExpandFields<Required<T>>>;
+    search?: string;
 }
 
 export type HasKeys<T> = [keyof T] extends [never] ? false : true;
