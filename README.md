@@ -1,21 +1,28 @@
 # odata-builder
+
 Generate Typesafe OData Queries with Ease. odata-builder ensures your queries are correct as you write them, eliminating worries about incorrect query formats.
 
 [![build and test](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml)
 [![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
 
 ## Install
+
 Install odata-builder using your preferred package manager:
 
 ```javascript
 npm install --save odata-builder
 ```
+
 or
+
 ```javascript
 yarn add odata-builder
 ```
+
 ## Usage
+
 Effortlessly create queries with typesafe objects:
+
 ```javascript
 const item = {
     someProperty: 'someValue',
@@ -30,7 +37,9 @@ const queryBuilder = new OdataQueryBuilder<typeof item>()
     .toQuery();
 //  ^ ?$count=true&$filter=someProperty eq 'test'&$skip=10&$top=100&$select=someOtherProperty1, someOtherProperty2
 ```
+
 ### Count and Data Retrieval
+
 For counting and data retrieval:
 
 ```javascript
@@ -40,8 +49,11 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
     .toQuery();
 //  ^ /$count?$filter=....
 ```
+
 ### Querying with GUID:
+
 Decide on the inclusion of single quotes in GUID queries:
+
 ```javascript
 import { Guid, OdataQueryBuilder } from 'odata-builder';
 
@@ -64,7 +76,9 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 //  ^ ?$filter=id eq some-guid
 
 ```
+
 ### Lambda Expressions for Array Filtering:
+
 Utilize lambda expressions for filtering array fields:
 
 ```javascript
@@ -87,7 +101,9 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 ```
 
 ### Filtering Objects in Arrays:
+
 Filter within arrays of objects:
+
 ```javascript
 type MyAwesomeDto = {
     ...
@@ -110,6 +126,7 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 ```
 
 ### Combined Filters:
+
 Combine multiple filters:
 
 ```javascript
@@ -124,7 +141,75 @@ Combine multiple filters:
     .toQuery();
 //  ^ ?$filter=(x eq test or y eq 5)
 ```
+
+### Full-Text Search Queries:
+
+Full-text search allows you to query textual data efficiently. Use the `search` method for global text searches across multiple fields or for advanced logical search expressions.
+
+#### Simple Search:
+
+You can use a raw string for basic search functionality:
+
+```javascript
+const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+    .search('simple search term')
+    .toQuery();
+//  ^ ?$search=simple%20search%20term
+```
+
+#### Advanced Search with SearchExpressionBuilder:
+
+For more complex search requirements, use the SearchExpressionBuilder to construct logical expressions.
+
+```javascript
+import { SearchExpressionBuilder } from 'odata-builder';
+
+const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+    .search(
+        new SearchExpressionBuilder()
+            .term('red')
+            .and()
+            .term('blue')
+            .or()
+            .group(
+                new SearchExpressionBuilder()
+                    .term('green')
+                    .not(new SearchExpressionBuilder().term('yellow')),
+            ),
+    )
+    .toQuery();
+//  ^ ?$search=(red%20AND%20blue%20OR%20(green%20AND%20(NOT%20yellow)))
+```
+
+#### Combining Search with Other Parameters:
+
+`search` can be combined seamlessly with other query parameters:
+
+```javascript
+const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+    .filter({ field: 'isActive', operator: 'eq', value: true })
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .top(20)
+    .search(
+        new SearchExpressionBuilder()
+            .term('keyword')
+            .and()
+            .phrase('exact phrase'),
+    )
+    .toQuery();
+//  ^ ?$filter=isActive eq true&$orderby=name asc&$top=20&$search=keyword%20AND%20%22exact%20phrase%22
+```
+
+#### Why Use SearchExpressionBuilder?
+
+The SearchExpressionBuilder provides:
+
+- **Logical Operators**: Combine search terms using `AND`, `OR`, and `NOT`.
+- **Grouping**: Use nested expressions for advanced search logic.
+- **Type Safety**: Get compile-time validation for all search expressions.
+
 ### Function Encapsulation:
+
 Encapsulate query creation:
 
 ```javascript
@@ -149,7 +234,9 @@ const testFn = (
 const result = testFn('y', 'eq', 'test');
 //  ^ ?$filter=y eq 'test'
 ```
+
 ### Property Expansion:
+
 Expand properties in queries:
 
 ```javascript
@@ -159,7 +246,7 @@ const item = {
 const queryBuilder = new OdataQueryBuilder<typeof item>();
     .expand('x')
     .toQuery();
-//  ^ ?expand=x  
+//  ^ ?expand=x
 ```
 
 You can do this with inner properties as well:
@@ -171,23 +258,27 @@ const item = {
 const queryBuilder = new OdataQueryBuilder<typeof item>();
     .expand('x/someProperty') // you will get autocomplete for these properties
     .toQuery();
-//  ^ ?expand=x/someProperty 
+//  ^ ?expand=x/someProperty
 ```
+
 # Features
-* Generate oData4 queries with typesafe objects.
-    * Check of field, value and possible operator for a filter
-    * Orderby, Select only fields of your model
-    * **Autocomplete** for every property in your filter, orderby, etc...
-    * Filtering of arrays in your model
-    * Filters can be added with strings that will get typechecked
-* Generate Queries to manipluate data (soon™)
+
+- Generate oData4 queries with typesafe objects.
+    - Check of field, value and possible operator for a filter
+    - Orderby, Select only fields of your model
+    - **Autocomplete** for every property in your filter, orderby, etc...
+    - Filtering of arrays in your model
+    - Filters can be added with strings that will get typechecked
+- Generate Queries to manipluate data (soon™)
+
 # ToDos
+
 - [x] Add **select** query
 - [x] Add **orderby** with order direction asc or desc
 - [x] Add single **filter** support with lambda expressions
 - [x] Add expand support
 - [ ] Add odata function support (partially done)
-- [ ] Add search support
-- [ ] Add support for data modification queries with odata 
+- [x] Add search support
+- [ ] Add support for data modification queries with odata
 
 Your contributions are welcome! If there's a feature you'd like to see in odata-builder, or if you encounter any issues, please feel free to open an issue or submit a pull request.

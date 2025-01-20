@@ -9,6 +9,8 @@ import { toExpandQuery } from './utils/expand/expand-util';
 import { toTopQuery } from './utils/top/top-utils';
 import { toSkipQuery } from './utils/skip/skip-utils';
 import { QueryComponents } from './types/utils/util.types';
+import { SearchExpressionBuilder } from './builder/search-expression-builder';
+import { createSearchTerm } from './utils/search/search.utils';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -53,7 +55,7 @@ export class OdataQueryBuilder<T> {
         >
     ): this {
         if (filters.length === 0) return this;
-         
+
         if (filters.some(filter => !filter))
             throw new Error('Invalid filter input');
 
@@ -84,6 +86,19 @@ export class OdataQueryBuilder<T> {
         return this.addComponent('orderBy', orderBy);
     }
 
+    search(searchExpression: string | SearchExpressionBuilder): this {
+        if (!searchExpression) {
+            delete this.queryComponents.search;
+            return this;
+        }
+
+        this.queryComponents.search =
+            typeof searchExpression === 'string'
+                ? createSearchTerm(searchExpression)
+                : searchExpression.toString();
+        return this;
+    }
+
     toQuery(): string {
         const queryGeneratorMap: Record<
             keyof QueryComponents<T>,
@@ -104,6 +119,8 @@ export class OdataQueryBuilder<T> {
                 toOrderByQuery(
                     Array.from(component as Set<OrderByDescriptor<T>>),
                 ),
+            search: component =>
+                `$search=${encodeURIComponent(component as string)}`,
         };
 
         const sortedEntries = Object.entries(this.queryComponents).sort(
