@@ -11,6 +11,10 @@ on:
             - '**'
     workflow_dispatch:
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     pr-checks:
         if: ${{ github.event_name == 'pull_request' }}
@@ -29,9 +33,9 @@ jobs:
             - name: Check for tags in PR
               run: |
                   echo "Checking for tags on all commits in the PR..."
-                  git fetch --tags
+                  git fetch --tags --quiet
                   for COMMIT in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.sha }}); do
-                    if git tag --points-at $COMMIT | grep .; then
+                    if git tag --points-at $COMMIT | grep -q .; then
                       echo "Tag found on commit $COMMIT. Tags are not allowed in PRs."
                       exit 1
                     fi
@@ -41,22 +45,22 @@ jobs:
             - name: Check for required labels
               run: |
                   echo "Checking for required labels ('ready-for-review' or 'dependencies')..."
-                  curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                  if ! curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                     https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | \
-                    jq '.labels[].name' | grep -qE "(ready-for-review|dependencies)" || \
-                    (echo "PR must have either the 'ready-for-review' or 'dependencies' label." && exit 1)
+                    jq -e '.labels[].name | select(. == "ready-for-review" or . == "dependencies")' > /dev/null 2>&1; then
+                    echo "PR must have either the 'ready-for-review' or 'dependencies' label."
+                    exit 1
+                  fi
 
     check-secrets:
         runs-on: ubuntu-latest
         steps:
             - name: Skip for Dependabot
-              run: |
-                  if [[ "$GITHUB_ACTOR" == "dependabot[bot]" ]]; then
-                    echo "Skipping secret verification for Dependabot."
-                    exit 0
-                  fi
+              if: github.actor == 'dependabot[bot]'
+              run: echo "Skipping secret verification for Dependabot."
 
             - name: Verify required secrets
+              if: github.actor != 'dependabot[bot]'
               run: |
                   echo "Verifying required secrets..."
                   REQUIRED_SECRETS=("GITHUB_TOKEN" "NPM_TOKEN")
@@ -93,43 +97,114 @@ jobs:
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
             - name: Install dependencies
               run: npm ci
-            - name: Run tests with verbose output
+            - name: Run tests with coverage
               id: run-tests
-              run: npm run test -- --reporter=verbose --coverage | tee full-test-output.txt
+              run: npm run test -- --coverage --reporter=json --reporter=default --outputFile=test-results.json
 
-            - name: Filter relevant test results
+            - name: Generate test summary and coverage
               if: ${{ github.event_name == 'pull_request' }}
               run: |
-                  # Filter relevant test results and coverage report
-                  awk '
-                  /^ *Tests|^ *Test Files|^ *Start at|^ *Duration/ {print}
-                  /^% Coverage report from/ {print; cov=1; next}
-                  cov && /^[^-]*$/ {print}
-                  cov && /^$/ {cov=0}
-                  ' full-test-output.txt > filtered-test-output.txt
-              shell: bash
+                  TEST_SUMMARY=$(cat test-results.json | jq -r '
+                  {
+                    "total": (.numTotalTests),
+                    "passed": (.numPassedTests),
+                    "failed": (.numFailedTests),
+                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / .numTotalTests * 100 | floor) else 100 end)
+                  }')
+                  echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
+                  echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
+                  echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
 
-            - name: Set filtered test results to environment variable
+                  PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')
+                  if (( $(echo "$PASS_RATE == 100" | bc -l) )); then
+                    PASS_RATE_ICON="🟢"
+                    TEST_STATUS="✅ All tests passed"
+                  else
+                    PASS_RATE_ICON="🔴"
+                    TEST_STATUS="❌ Tests failed"
+                  fi
+                  echo "TEST_SUMMARY_PASS_RATE=${PASS_RATE_ICON} ${PASS_RATE}%" >> $GITHUB_ENV
+                  echo "TEST_STATUS=${TEST_STATUS}" >> $GITHUB_ENV
+
+            - name: Generate test coverage summary with insights
               if: ${{ github.event_name == 'pull_request' }}
-              run: echo "FILTERED_RESULTS=$(cat filtered-test-output.txt)" >> $GITHUB_ENV
+              run: |
+                  COVERAGE_OUTPUT=$(npm run coverage:ci | grep "All files" | awk -F'|' '
+                    {
+                      statements=$2+0;
+                      branches=$3+0;
+                      functions=$4+0;
+                      lines=$5+0;
 
-            - name: Post filtered test results to PR
+                      if (statements == 100) statements_insight="🚀 Excellent coverage!";
+                      else if (statements >= 90) statements_insight="✅ Great coverage, keep it up!";
+                      else if (statements >= 75) statements_insight="⚠️ Good coverage, but improvements are possible.";
+                      else statements_insight="❌ Coverage needs improvement.";
+
+                      if (branches == 100) branches_insight="🚀 Excellent coverage!";
+                      else if (branches >= 90) branches_insight="✅ Great coverage, keep it up!";
+                      else if (branches >= 75) branches_insight="⚠️ Good coverage, but improvements are possible.";
+                      else branches_insight="❌ Coverage needs improvement.";
+
+                      if (functions == 100) functions_insight="🚀 Excellent coverage!";
+                      else if (functions >= 90) functions_insight="✅ Great coverage, keep it up!";
+                      else if (functions >= 75) functions_insight="⚠️ Good coverage, but improvements are possible.";
+                      else functions_insight="❌ Coverage needs improvement.";
+
+                      if (lines == 100) lines_insight="🚀 Excellent coverage!";
+                      else if (lines >= 90) lines_insight="✅ Great coverage, keep it up!";
+                      else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
+                      else lines_insight="❌ Coverage needs improvement.";
+
+                      printf "| Statements  | %s       | %s |\n", $2, statements_insight;
+                      printf "| Branches    | %s       | %s |\n", $3, branches_insight;
+                      printf "| Functions   | %s       | %s |\n", $4, functions_insight;
+                      printf "| Lines       | %s       | %s |\n", $5, lines_insight;
+                    }')
+
+                  echo "COVERAGE<<EOF" >> $GITHUB_ENV
+                  echo "$COVERAGE_OUTPUT" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
+
+            - name: Post test summary and coverage to PR
               if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: Test Results
+                  header: '🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}'
                   message: |
-                      Node.js Version: ${{ matrix.node-version }}
-                      ```shell
-                      ${{ env.FILTERED_RESULTS }}
-                      ```
+                      # 🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}
+
+                      ## 🛠 **Summary**
+                      | Metric         | Value                                   |
+                      |----------------|-----------------------------------------|
+                      | **Total Tests**| 🧪 ${{ env.TEST_SUMMARY_TOTAL }}        |
+                      | **Passed**     | ✅ ${{ env.TEST_SUMMARY_PASSED }}       |
+                      | **Failed**     | ❌ ${{ env.TEST_SUMMARY_FAILED }}       |
+                      | **Pass Rate**  | **${{ env.TEST_SUMMARY_PASS_RATE }}** |
+
+                      ## 📊 **Coverage Details**
+                      <details>
+                      <summary>🔍 Click to expand</summary>
+
+                      ### Coverage Summary with Insights
+                      | Metric      | Coverage | Insights                          |
+                      |-------------|----------|-----------------------------------|
+                      ${{ env.COVERAGE }}
+                      > **Note:** Coverage insights are calculated based on the current thresholds.  
+                      > Consider adjusting thresholds for stricter validation and enhanced quality checks if needed.
+
+                      </details>
+
+                      ---
+                      > *Generated automatically by CI Pipeline*
+                  operationType: upsert
 
             - name: Upload full test output as artifact
               if: ${{ github.event_name == 'pull_request' }}
               uses: actions/upload-artifact@v3
               with:
-                  name: full-test-output-${{ matrix.node-version }}.txt
-                  path: full-test-output.txt
+                  name: full-test-output-${{ matrix.node-version }}
+                  path: test-results.json
 
     lint:
         needs: check-secrets
@@ -139,10 +214,12 @@ jobs:
                 node-version: [18, 20]
         steps:
             - uses: actions/checkout@v3
+
             - name: Set up Node.js ${{ matrix.node-version }}
               uses: actions/setup-node@v3
               with:
                   node-version: ${{ matrix.node-version }}
+
             - name: Cache Node.js modules
               uses: actions/cache@v3
               with:
@@ -150,16 +227,89 @@ jobs:
                   key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
                   restore-keys: |
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
+
             - name: Install dependencies
               run: npm ci
-            - name: Lint code
-              run: npm run lint
-            - name: PR Comment with Lint Results
+
+            - name: Run linting
+              id: eslint-check
+              run: npm run lint -- --format json --output-file eslint-results.json
+              continue-on-error: true
+
+            - name: Generate Lint Summary
+              id: lint-summary
+              run: |
+                  ESLINT_OUTPUT=$(cat eslint-results.json)
+
+                  ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
+                  WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
+
+                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
+                    file: (.filePath | sub("^.*/"; "")),
+                    messages: (
+                      [.messages[] | {
+                        severity: (if (.severity) == 2 then "🚨 Error" else "⚠️ Warning" end),
+                        line: .line,
+                        column: .column,
+                        message: .message,
+                        ruleId: .ruleId
+                      }] +
+                      [.suppressedMessages[] | {
+                        severity: "⚠️ Suppressed",
+                        line: .line,
+                        column: .column,
+                        message: .message,
+                        ruleId: .ruleId
+                      }]
+                    )
+                  }] | map(
+                    "#### File: `\(.file)`\n" +
+                    (.messages | map("- \(.severity) on line \(.line), column \(.column): \(.message) (\(.ruleId))") | join("\n"))
+                  ) | join("\n\n")' | sed 's/%/%25/g; s/\n/%0A/g; s/\r/%0D/g')
+
+                  echo "LINT_ERRORS=$ERROR_COUNT" >> $GITHUB_ENV
+                  echo "LINT_WARNINGS=$WARNING_COUNT" >> $GITHUB_ENV
+                  echo "LINT_DETAILS<<EOF" >> $GITHUB_ENV
+                  echo "$DETAILS" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
+
+                  if [ "$ERROR_COUNT" -gt 0 ]; then
+                    echo "LINT_STATUS=🚨 Issues Found" >> $GITHUB_ENV
+                  else
+                    echo "LINT_STATUS=✅ No Issues" >> $GITHUB_ENV
+                  fi
+
+            - name: Post ESLint results to PR
               if: ${{ github.event_name == 'pull_request' }}
-              uses: reviewdog/action-eslint@v1
+              uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  reporter: github-pr-review
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  header: '📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}'
+                  message: |
+                      # 📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}
+
+                      ## 🛠 **Lint Summary**
+                      | Metric         | Count                                   |
+                      |----------------|-----------------------------------------|
+                      | **Errors**     | 🚨 ${{ env.LINT_ERRORS }}              |
+                      | **Warnings**   | ⚠️ ${{ env.LINT_WARNINGS }}            |
+
+                      ## 🔍 **Detailed Linting Report**
+                      <details>
+                      <summary>🔍 Click to expand</summary>
+
+                      ### File-by-File Insights
+                      ${{ env.LINT_DETAILS }}
+                      ---
+                      > **🔧 Pro-Tip:**  
+                      > Suppressed errors should be reviewed and justified to maintain clean code.  
+                      > Consider fixing warnings to improve maintainability.
+
+                      > **Note:** Linting results help maintain code quality and ensure project standards are met.
+
+                      </details>
+
+                      ---
+                      > *Generated automatically by CI pipeline.*
 
     audit:
         needs: check-secrets
@@ -179,8 +329,99 @@ jobs:
                       ${{ runner.os }}-node-
             - name: Install dependencies
               run: npm ci
-            - name: Audit dependencies
-              run: npm audit --production
+            - name: Run audit
+              id: npm-audit
+              run: npm audit --production --json > npm-audit-results.json
+              continue-on-error: true
+
+            - name: Check for audit errors
+              id: check-audit-errors
+              if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                  NPM_AUDIT_OUTPUT=$(cat npm-audit-results.json)
+
+                  INFO=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.info')
+                  LOW=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.low')
+                  MODERATE=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.moderate')
+                  HIGH=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.high')
+                  CRITICAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical')
+                  TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.total')
+
+                  PROD=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.prod')
+                  DEV=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.dev')
+                  OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.optional')
+                  PEER=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peer')
+                  PEER_OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peerOptional')
+                  DEP_TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.total')
+
+                  echo "NPM_AUDIT_INFO=$INFO" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_LOW=$LOW" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_MODERATE=$MODERATE" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_HIGH=$HIGH" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_CRITICAL=$CRITICAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_TOTAL=$TOTAL" >> $GITHUB_ENV
+
+                  echo "NPM_AUDIT_PROD=$PROD" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_DEV=$DEV" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_OPTIONAL=$OPTIONAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_PEER=$PEER" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_PEER_OPTIONAL=$PEER_OPTIONAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_DEP_TOTAL=$DEP_TOTAL" >> $GITHUB_ENV
+                  if [[ $CRITICAL -gt 0 || $HIGH -gt 0 ]]; then
+                    STATUS_ICON="🔴"
+                    STATUS_MESSAGE="**Critical vulnerabilities found! Immediate action required.**"
+                  elif [[ $MODERATE -gt 0 || $LOW -gt 0 ]]; then
+                    STATUS_ICON="🟡"
+                    STATUS_MESSAGE="**Some vulnerabilities detected. Please review the details below.**"
+                  else
+                    STATUS_ICON="🟢"
+                    STATUS_MESSAGE="**No vulnerabilities found. Excellent job keeping dependencies secure! 🎉**"
+                  fi
+
+                  echo "NPM_AUDIT_STATUS_ICON=$STATUS_ICON" >> $GITHUB_ENV
+                  if [[ $TOTAL -gt 0 ]]; then
+                    echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
+                    echo "AUDIT_STATUS_MESSAGE=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
+                  else
+                    echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
+                    echo "AUDIT_STATUS_MESSAGE=🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉" >> $GITHUB_ENV
+                  fi
+
+            - name: Post npm audit results to PR
+              if: ${{ github.event_name == 'pull_request' }}
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  header: 🔒 NPM Audit Findings
+                  message: |
+                      # 🔒 **NPM Audit Findings**
+
+                      ## 🚦 **Vulnerability Summary**
+                      | **Severity**     | **Count**                           |
+                      |------------------|-------------------------------------|
+                      | 🟢 **Info**      | `${{ env.NPM_AUDIT_INFO }}`         |
+                      | 🟡 **Low**       | `${{ env.NPM_AUDIT_LOW }}`          |
+                      | 🟠 **Moderate**  | `${{ env.NPM_AUDIT_MODERATE }}`     |
+                      | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
+                      | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
+
+                      ## ${{ env.NPM_AUDIT_STATUS_ICON }} **Status**
+                      ${{ env.AUDIT_STATUS_MESSAGE }}
+
+                      ---
+
+                      ## 📦 **Dependency Overview**
+                      | **Dependency Type** | **Count**                        |
+                      |---------------------|----------------------------------|
+                      | 🏗️ **Production**   | `${{ env.NPM_AUDIT_PROD }}`      |
+                      | 🛠️ **Development**  | `${{ env.NPM_AUDIT_DEV }}`       |
+                      | 🎲 **Optional**     | `${{ env.NPM_AUDIT_OPTIONAL }}`  |
+                      | 🤝 **Peer**         | `${{ env.NPM_AUDIT_PEER }}`      |
+                      | 🤝 **Peer Optional**| `${{ env.NPM_AUDIT_PEER_OPTIONAL }}` |
+                      | 📦 **Total**        | `${{ env.NPM_AUDIT_DEP_TOTAL }}` |
+
+                      ---
+                      > 🔗 *Generated automatically by the CI pipeline to keep your dependencies secure.*
+                  operationType: upsert
 
     build:
         needs: [test, lint, audit]
@@ -227,10 +468,12 @@ jobs:
                   fi
 
             - name: Sanitize ref name
+              if: github.event_name == 'push'
               run: |
                   echo "SANITIZED_REF_NAME=${GITHUB_REF_NAME//\//_}" >> $GITHUB_ENV
 
             - name: Archive build artifacts
+              if: github.event_name == 'push'
               uses: actions/upload-artifact@v4
               with:
                   name: dist-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}
@@ -267,6 +510,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     request-approval:
         needs: [create-release]
+        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
         runs-on: ubuntu-latest
         environment:
             name: production
@@ -275,8 +519,8 @@ jobs:
               run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
 
     publish:
-        needs: [create-release]
-        if: github.base_ref == 'main'
+        needs: [request-approval]
+        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
