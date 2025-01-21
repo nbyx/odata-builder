@@ -200,6 +200,87 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
 //  ^ ?$filter=isActive eq true&$orderby=name asc&$top=20&$search=keyword%20AND%20%22exact%20phrase%22
 ```
 
+### SearchExpressionBuilder Methods
+
+The `SearchExpressionBuilder` provides methods to build logical search expressions. Here's an overview of its core methods:
+
+#### **1. `term`**
+Adds a single search term to the expression.
+
+- **Example**:
+    ```javascript
+    new SearchExpressionBuilder().term('keyword');
+    // ^ keyword
+    ```
+
+- **Behavior**: A single word without quotes.
+
+#### **2. `phrase`**
+Adds a phrase (multiple words) as a single search entity, enclosed in quotes.
+
+- **Example**:
+    ```javascript
+    new SearchExpressionBuilder().phrase('exact match');
+    // ^ "exact match"
+    ```
+
+- **Behavior**: Ensures the entire phrase is treated as a single unit.
+
+#### **3. `and` / `or`**
+Adds logical operators to combine multiple terms or phrases.
+
+- **Example**:
+    ```javascript
+    new SearchExpressionBuilder().term('red').and().term('blue');
+    // ^ red AND blue
+    ```
+
+#### **4. `not`**
+Negates a search expression.
+
+- **Example**:
+    ```javascript
+    new SearchExpressionBuilder().not(new SearchExpressionBuilder().term('red'));
+    // ^ NOT red
+    ```
+
+#### **5. `group`**
+Groups a search expression to control logical precedence.
+
+- **Example**:
+    ```javascript
+    new SearchExpressionBuilder().group(
+        new SearchExpressionBuilder().term('red').or().term('blue')
+    );
+    // ^ (red OR blue)
+    ```
+
+---
+
+### `build` vs `toString`
+
+#### **`build`**
+- Returns the raw structure of the search expression as an array of parts.
+- Useful for debugging or extending the search logic programmatically.
+
+- **Example**:
+    ```javascript
+    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
+    console.log(builder.build());
+    // ^ [ 'red', 'AND', 'blue' ]
+    ```
+
+#### **`toString`**
+- Converts the search expression into a properly formatted query string.
+- Used when appending the search to an OData query.
+
+- **Example**:
+    ```javascript
+    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
+    console.log(builder.toString());
+    // ^ red AND blue
+    ```
+
 #### Why Use SearchExpressionBuilder?
 
 The SearchExpressionBuilder provides:
