@@ -121,13 +121,11 @@ jobs:
               run: |
                   COVERAGE_OUTPUT=$(npm run coverage:ci | grep "All files" | awk -F'|' '
                     {
-                      # Extrahiere die Coverage-Werte
                       statements=$2+0;
                       branches=$3+0;
                       functions=$4+0;
                       lines=$5+0;
 
-                      # Interpretation der Werte direkt in Bedingung
                       if (statements == 100) statements_insight="🚀 Excellent coverage!";
                       else if (statements >= 90) statements_insight="✅ Great coverage, keep it up!";
                       else if (statements >= 75) statements_insight="⚠️ Good coverage, but improvements are possible.";
@@ -148,7 +146,6 @@ jobs:
                       else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
                       else lines_insight="❌ Coverage needs improvement.";
 
-                      # Erstelle die Markdown-Tabelle mit Interpretationen
                       printf "### Coverage Summary with Insights\\n";
                       printf "| Metric      | Coverage | Insights                          |\\n";
                       printf "|-------------|----------|-----------------------------------|\\n";
@@ -158,7 +155,6 @@ jobs:
                       printf "| Lines       | %s       | %s |\\n", $5, lines_insight;
                     }')
 
-                  # Schreibe in die Umgebungsvariable
                   echo "COVERAGE<<EOF" >> $GITHUB_ENV
                   echo "$COVERAGE_OUTPUT" >> $GITHUB_ENV
                   echo "EOF" >> $GITHUB_ENV
