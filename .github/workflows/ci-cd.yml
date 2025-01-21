@@ -106,10 +106,10 @@ jobs:
               run: |
                   TEST_SUMMARY=$(cat test-results.json | jq -r '
                   {
-                    "total": (.successes + .failures),
-                    "passed": (.successes),
-                    "failed": (.failures),
-                    "pass_rate": (if (.successes + .failures) > 0 then (.successes / (.successes + .failures) * 100 | floor / 100) else 100 end)
+                    "total": (.numTotalTests),
+                    "passed": (.numPassedTests),
+                    "failed": (.numFailedTests),
+                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / (.numPassedTests + .numFailedTests) * 100 | floor / 100) else 100 end)
                   }')
                   echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
@@ -124,21 +124,30 @@ jobs:
               if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: Test Results (Node ${{ matrix.node-version }})
+                  header: 🚀 Test Results (Node ${{ matrix.node-version }})
                   message: |
-                      ### Test Results (Node ${{ matrix.node-version }})
+                      # 🚀 Test Results (Node ${{ matrix.node-version }})
 
-                      **Summary:**
-                      - Total Tests: ${{ env.TEST_SUMMARY_TOTAL }}
-                      - Passed: ${{ env.TEST_SUMMARY_PASSED }}
-                      - Failed: ${{ env.TEST_SUMMARY_FAILED }}
-                      - Pass Rate: **${{ env.TEST_SUMMARY_PASS_RATE }}%**
+                      ## 🛠 **Summary**
+                      | Metric         | Value                                   |
+                      |----------------|-----------------------------------------|
+                      | **Total Tests**| 🧪 ${{ env.TEST_SUMMARY_TOTAL }}        |
+                      | **Passed**     | ✅ ${{ env.TEST_SUMMARY_PASSED }}       |
+                      | **Failed**     | ❌ ${{ env.TEST_SUMMARY_FAILED }}       |
+                      | **Pass Rate**  | 🟢 **${{ env.TEST_SUMMARY_PASS_RATE }}%** |
 
-                      <details><summary>Coverage Details</summary>
-                      ```text
+                      ## 📊 **Coverage Details**
+                      <details>
+                      <summary>🔍 Click to expand</summary>
+
+                      ```plaintext
                       ${{ env.COVERAGE }}
                       ```
+
                       </details>
+
+                      ---
+                      > *Generated automatically by CI Pipeline*
                   operationType: upsert
 
             - name: Upload full test output as artifact
@@ -265,13 +274,24 @@ jobs:
               if: ${{ github.event_name == 'pull_request' && env.NPM_AUDIT_HAS_ERRORS == 'true' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: NPM Audit Findings
+                  header: ⚠️ NPM Audit Findings
                   message: |
-                      ### :warning: NPM Audit Findings :warning:
+                      # ⚠️ **NPM Audit Findings**
 
-                      **Important:** npm audit has identified potential security vulnerabilities.
+                      ## 🔍 **Summary**
+                      | Type                 | Description                                   |
+                      |----------------------|-----------------------------------------------|
+                      | **Status**           | 🚨 Potential vulnerabilities detected         |
+                      | **Details**          | Please review the attached audit log         |
 
-                      Please review the full npm audit log in the workflow run artifacts for detailed information and remediation steps.
+                      ## 📋 **Action Required**
+                      > **Take the following steps to resolve:**
+                      > 1. Analyze the `npm audit` log in the workflow artifacts.
+                      > 2. Address vulnerabilities by updating dependencies or applying patches.
+                      > 3. Confirm the resolution before merging this PR.
+
+                      ---
+                      🔗 *View the full audit log in the workflow artifacts section.*
                   operationType: upsert
 
     build:
