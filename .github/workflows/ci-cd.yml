@@ -212,6 +212,9 @@ jobs:
         strategy:
             matrix:
                 node-version: [18, 20]
+        outputs:
+            has_errors: ${{ steps.lint-summary.outputs.has_errors }}
+            has_warnings: ${{ steps.lint-summary.outputs.has_warnings }}
         steps:
             - uses: actions/checkout@v3
             - name: Set up Node.js ${{ matrix.node-version }}
@@ -230,60 +233,81 @@ jobs:
             - name: Run linting
               id: eslint-check
               run: npm run lint -- --format json --output-file eslint-results.json
-              continue-on-error: true # Allow the workflow to continue even if there are linting errors
+              continue-on-error: true
 
-            - name: Load ESLint results
-              id: load-eslint-results
+            - name: Generate Lint Summary
+              id: lint-summary
               if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                  ESLINT_OUTPUT=$(cat eslint-results.json)
+                  ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
+                  WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
+
+                  echo "errors=$ERROR_COUNT" >> $GITHUB_OUTPUT
+                  echo "warnings=$WARNING_COUNT" >> $GITHUB_OUTPUT
+                  if [ "$ERROR_COUNT" -gt 0 ]; then
+                      echo "has_errors=true" >> $GITHUB_OUTPUT
+                  else
+                      echo "has_errors=false" >> $GITHUB_OUTPUT
+                  fi
+                  if [ "$WARNING_COUNT" -gt 0 ]; then
+                      echo "has_warnings=true" >> $GITHUB_OUTPUT
+                  else
+                      echo "has_warnings=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Upload ESLint results as artifact
+              if: ${{ github.event_name == 'pull_request' }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: eslint-results
+                  path: eslint-results.json
+
+    report-lint:
+        needs: lint
+        if: ${{ github.event_name == 'pull_request' }}
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download ESLint results
+              uses: actions/download-artifact@v4
+              with:
+                  name: eslint-results
+                  path: .
+
+            - name: Read ESLint results
+              id: read-eslint
               uses: actions/github-script@v6
               with:
                   script: |
                       const fs = require('fs');
-                      const resultsPath = 'eslint-results.json';
-                      if (fs.existsSync(resultsPath)) {
-                        const rawResults = fs.readFileSync(resultsPath, 'utf8');
-                        const results = JSON.parse(rawResults);
-                        const annotations = results.flatMap(fileResult =>
-                          fileResult.messages.map(message => ({
-                            path: fileResult.filePath.substring(process.env.GITHUB_WORKSPACE.length + 1),
-                            start_line: message.line,
-                            end_line: message.line,
-                            start_column: message.column,
-                            end_column: message.column,
-                            annotation_level: message.severity === 2 ? 'failure' : 'warning',
-                            message: `${message.message} (${message.ruleId})`,
-                            title: 'ESLint Violation',
-                          }))
-                        );
-                        core.setOutput('eslint_annotations', annotations);
-                      } else {
-                        core.setOutput('eslint_annotations', []);
+                      const eslintResults = JSON.parse(fs.readFileSync('eslint-results.json', 'utf8'));
+
+                      let commentBody = '## 📏 **ESLint Analysis**\n';
+                      let hasIssues = false;
+
+                      eslintResults.forEach(file => {
+                          if (file.messages.length > 0) {
+                              hasIssues = true;
+                              commentBody += `\n### 📄 File: \`${file.filePath.substring(process.env.GITHUB_WORKSPACE.length + 1)}\`\n`;
+                              file.messages.forEach(message => {
+                                  const severity = message.severity === 2 ? '🚨 Error' : '⚠️ Warning';
+                                  commentBody += `- ${severity} on line ${message.line}, column ${message.column}: ${message.message} (\`${message.ruleId}\`)\n`;
+                              });
+                          }
+                      });
+
+                      if (!hasIssues) {
+                          commentBody += '\n✅ No linting issues found. Excellent work! 🎉\n';
                       }
 
-            - name: Post ESLint results to PR
-              if: ${{ github.event_name == 'pull_request' && steps.load-eslint-results.outputs.eslint_annotations != '[]' }}
-              uses: actions/github-script@v6
-              with:
-                  script: |
-                      const annotations = JSON.parse(core.getOutput('eslint_annotations'));
-                      const conclusion = annotations.length > 0 ? 'failure' : 'success';
-                      const summary = annotations.length > 0
-                        ? `ESLint found ${annotations.length} areas for improvement. See the annotations below for details on how to align with our code style.`
-                        : 'ESLint found no issues. Great job keeping the code clean!';
+                      core.setOutput('commentBody', commentBody);
 
-                      await github.rest.checks.create({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        name: 'ESLint Check',
-                        head_sha: context.payload.pull_request.head.sha,
-                        status: 'completed',
-                        conclusion: conclusion,
-                        output: {
-                          title: 'ESLint Results',
-                          summary: summary,
-                          annotations: annotations,
-                        },
-                      });
+            - name: Create or update PR comment
+              uses: peter-evans/create-or-update-comment@v3
+              with:
+                  issue-number: ${{ github.issue.number }}
+                  body: ${{ steps.read-eslint.outputs.commentBody }}
+                  header: lint-results
 
     audit:
         needs: check-secrets
