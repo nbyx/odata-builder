@@ -207,107 +207,94 @@ jobs:
                   path: test-results.json
 
     lint:
-        needs: check-secrets
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                node-version: [18, 20]
-        outputs:
-            has_errors: ${{ steps.lint-summary.outputs.has_errors }}
-            has_warnings: ${{ steps.lint-summary.outputs.has_warnings }}
-        steps:
-            - uses: actions/checkout@v3
-            - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: ${{ matrix.node-version }}
-            - name: Cache Node.js modules
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-${{ matrix.node-version }}-
-            - name: Install dependencies
-              run: npm ci
-            - name: Run linting
-              id: eslint-check
-              run: npm run lint -- --format json --output-file eslint-results.json
-              continue-on-error: true
+      needs: check-secrets
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          node-version: [18, 20]
+      steps:
+        - uses: actions/checkout@v3
 
-            - name: Generate Lint Summary
-              id: lint-summary
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  ESLINT_OUTPUT=$(cat eslint-results.json)
-                  ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
-                  WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
+        - name: Set up Node.js ${{ matrix.node-version }}
+          uses: actions/setup-node@v3
+          with:
+            node-version: ${{ matrix.node-version }}
 
-                  echo "errors=$ERROR_COUNT" >> $GITHUB_OUTPUT
-                  echo "warnings=$WARNING_COUNT" >> $GITHUB_OUTPUT
-                  if [ "$ERROR_COUNT" -gt 0 ]; then
-                      echo "has_errors=true" >> $GITHUB_OUTPUT
-                  else
-                      echo "has_errors=false" >> $GITHUB_OUTPUT
-                  fi
-                  if [ "$WARNING_COUNT" -gt 0 ]; then
-                      echo "has_warnings=true" >> $GITHUB_OUTPUT
-                  else
-                      echo "has_warnings=false" >> $GITHUB_OUTPUT
-                  fi
+        - name: Cache Node.js modules
+          uses: actions/cache@v3
+          with:
+            path: ~/.npm
+            key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+            restore-keys: |
+              ${{ runner.os }}-node-${{ matrix.node-version }}-
 
-            - name: Upload ESLint results as artifact
-              if: ${{ github.event_name == 'pull_request' }}
-              uses: actions/upload-artifact@v4
-              with:
-                  name: eslint-results
-                  path: eslint-results.json
+        - name: Install dependencies
+          run: npm ci
 
-    report-lint:
-        needs: lint
-        if: ${{ github.event_name == 'pull_request' }}
-        runs-on: ubuntu-latest
-        steps:
-            - name: Download ESLint results
-              uses: actions/download-artifact@v4
-              with:
-                  name: eslint-results
-                  path: .
+        - name: Run linting
+          id: eslint-check
+          run: npm run lint -- --format json --output-file eslint-results.json
+          continue-on-error: true
 
-            - name: Read ESLint results
-              id: read-eslint
-              uses: actions/github-script@v6
-              with:
-                  script: |
-                      const fs = require('fs');
-                      const eslintResults = JSON.parse(fs.readFileSync('eslint-results.json', 'utf8'));
+        - name: Generate Lint Summary
+          id: lint-summary
+          run: |
+            ESLINT_OUTPUT=$(cat eslint-results.json)
+            
+            ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
+            WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
 
-                      let commentBody = '## 📏 **ESLint Analysis**\n';
-                      let hasIssues = false;
+            DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | {
+              file: .filePath,
+              messages: [.messages[] | {
+                severity: if .severity == 2 then "🚨 Error" else "⚠️ Warning" end,
+                line: .line,
+                column: .column,
+                message: .message,
+                ruleId: .ruleId
+              }]
+            }] | map(
+              "#### File: `\(.file)`\n" + 
+              (.messages | map("- \(.severity) on line \(.line), column \(.column): \(.message) (\(.ruleId))") | join("\n"))
+            ) | join("\n\n")')
 
-                      eslintResults.forEach(file => {
-                          if (file.messages.length > 0) {
-                              hasIssues = true;
-                              commentBody += `\n### 📄 File: \`${file.filePath.substring(process.env.GITHUB_WORKSPACE.length + 1)}\`\n`;
-                              file.messages.forEach(message => {
-                                  const severity = message.severity === 2 ? '🚨 Error' : '⚠️ Warning';
-                                  commentBody += `- ${severity} on line ${message.line}, column ${message.column}: ${message.message} (\`${message.ruleId}\`)\n`;
-                              });
-                          }
-                      });
+            echo "LINT_ERRORS=$ERROR_COUNT" >> $GITHUB_ENV
+            echo "LINT_WARNINGS=$WARNING_COUNT" >> $GITHUB_ENV
+            echo "LINT_DETAILS=$DETAILS" >> $GITHUB_ENV
 
-                      if (!hasIssues) {
-                          commentBody += '\n✅ No linting issues found. Excellent work! 🎉\n';
-                      }
+            if [ "$ERROR_COUNT" -gt 0 ]; then
+              echo "LINT_STATUS=🚨 Issues Found" >> $GITHUB_ENV
+            else
+              echo "LINT_STATUS=✅ No Issues" >> $GITHUB_ENV
+            fi
 
-                      core.setOutput('commentBody', commentBody);
+        - name: Post ESLint results to PR
+          if: ${{ github.event_name == 'pull_request' }}
+          uses: marocchino/sticky-pull-request-comment@v2
+          with:
+            header: '📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}'
+            message: |
+              # 📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}
 
-            - name: Create or update PR comment
-              uses: peter-evans/create-or-update-comment@v3
-              with:
-                  issue-number: ${{ github.issue.number }}
-                  body: ${{ steps.read-eslint.outputs.commentBody }}
-                  header: lint-results
+              ## 🛠 **Lint Summary**
+              | Metric         | Count                                   |
+              |----------------|-----------------------------------------|
+              | **Errors**     | 🚨 ${{ env.LINT_ERRORS }}              |
+              | **Warnings**   | ⚠️ ${{ env.LINT_WARNINGS }}            |
+
+              ## 🔍 **Detailed Linting Report**
+              <details>
+              <summary>🔍 Click to expand</summary>
+
+              ### File-by-File Insights
+              ${{ env.LINT_DETAILS }}
+
+              > **Note:** Linting results help maintain code quality and ensure project standards are met.
+
+              </details>
+
+              ---
+              > *Generated automatically by CI pipeline.*
 
     audit:
         needs: check-secrets
