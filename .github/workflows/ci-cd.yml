@@ -192,10 +192,10 @@ jobs:
                       ${{ env.COVERAGE }}
 
                       ---
-                      **Coverage insights are based on current thresholds.**  
-                      Adjust thresholds for stricter checks if needed.
+                      > **Note:** Coverage insights are calculated based on the current thresholds.  
+                      > Consider adjusting thresholds for stricter validation and enhanced quality checks if needed.
 
-                        </details>
+                      </details>
 
                       ---
                       > *Generated automatically by CI Pipeline*
