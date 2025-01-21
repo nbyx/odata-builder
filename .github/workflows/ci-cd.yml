@@ -357,10 +357,10 @@ jobs:
                   echo "NPM_AUDIT_STATUS_ICON=$STATUS_ICON" >> $GITHUB_ENV
                   if [[ $TOTAL -gt 0 ]]; then
                     echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
-                    echo "STATUS=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
+                    echo "AUDIT_STATUS_MESSAGE=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
                   else
                     echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
-                    echo "STATUS=🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉" >> $GITHUB_ENV
+                    echo "AUDIT_STATUS_MESSAGE=🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉" >> $GITHUB_ENV
                   fi
 
             - name: Post npm audit results to PR
@@ -380,7 +380,7 @@ jobs:
                       | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
                       | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
 
-                      ## ${{ env.AUDIT_STATUS_ICON }} **Status**
+                      ## ${{ env.NPM_AUDIT_STATUS_ICON }} **Status**
                       ${{ env.AUDIT_STATUS_MESSAGE }}
 
                       ---
