@@ -109,7 +109,7 @@ jobs:
                     "total": (.numTotalTests),
                     "passed": (.numPassedTests),
                     "failed": (.numFailedTests),
-                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / (.numPassedTests + .numFailedTests) * 100 | floor / 100) else 100 end)
+                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / (.numPassedTests + .numFailedTests) * 100 | floor) else 100 end)
                   }')
                   echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
