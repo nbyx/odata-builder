@@ -265,7 +265,6 @@ jobs:
               run: |
                   NPM_AUDIT_OUTPUT=$(cat npm-audit-results.json)
 
-                  # Extrahiere die Schwachstellen aus dem JSON
                   INFO=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.info')
                   LOW=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.low')
                   MODERATE=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.moderate')
@@ -273,7 +272,13 @@ jobs:
                   CRITICAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical')
                   TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.total')
 
-                  # Setze Umgebungsvariablen für die Ergebnisse
+                  PROD=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.prod')
+                  DEV=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.dev')
+                  OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.optional')
+                  PEER=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peer')
+                  PEER_OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peerOptional')
+                  DEP_TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.total')
+
                   echo "NPM_AUDIT_INFO=$INFO" >> $GITHUB_ENV
                   echo "NPM_AUDIT_LOW=$LOW" >> $GITHUB_ENV
                   echo "NPM_AUDIT_MODERATE=$MODERATE" >> $GITHUB_ENV
@@ -281,11 +286,19 @@ jobs:
                   echo "NPM_AUDIT_CRITICAL=$CRITICAL" >> $GITHUB_ENV
                   echo "NPM_AUDIT_TOTAL=$TOTAL" >> $GITHUB_ENV
 
-                  # Setze eine Fehlerkennung basierend auf der Gesamtanzahl
+                  echo "NPM_AUDIT_PROD=$PROD" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_DEV=$DEV" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_OPTIONAL=$OPTIONAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_PEER=$PEER" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_PEER_OPTIONAL=$PEER_OPTIONAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_DEP_TOTAL=$DEP_TOTAL" >> $GITHUB_ENV
+
                   if [[ $TOTAL -gt 0 ]]; then
                     echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
+                    echo "STATUS=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
                   else
                     echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
+                    echo "STATUS=🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉" >> $GITHUB_ENV
                   fi
 
             - name: Post npm audit results to PR
@@ -306,11 +319,7 @@ jobs:
                       | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
 
                       ## ✅ **Status**
-                      {% if env.NPM_AUDIT_HAS_ERRORS == 'true' %}
-                      🚨 **Vulnerabilities detected!** Please address the issues listed above.  
-                      {% else %}
-                      🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉  
-                      {% endif %}
+                      ${{ env.STATUS }}
 
                       ## 📦 **Dependency Overview**
                       | **Dependency Type** | **Count**                        |
@@ -319,7 +328,8 @@ jobs:
                       | 🛠️ **Development**  | `${{ env.NPM_AUDIT_DEV }}`       |
                       | 🎲 **Optional**     | `${{ env.NPM_AUDIT_OPTIONAL }}`  |
                       | 🤝 **Peer**         | `${{ env.NPM_AUDIT_PEER }}`      |
-                      | 📦 **Total**        | `${{ env.NPM_AUDIT_TOTAL }}`     |
+                      | 🤝 **Peer Optional**| `${{ env.NPM_AUDIT_PEER_OPTIONAL }}` |
+                      | 📦 **Total**        | `${{ env.NPM_AUDIT_DEP_TOTAL }}` |
 
                       ---
                       > 🔗 *Generated automatically by the CI pipeline to keep your dependencies secure.*
