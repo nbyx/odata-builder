@@ -380,8 +380,8 @@ jobs:
                       | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
                       | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
 
-                      ## {{ env.AUDIT_STATUS_ICON }} **Status**
-                      {{ env.AUDIT_STATUS_MESSAGE }}
+                      ## ${{ env.AUDIT_STATUS_ICON }} **Status**
+                      ${{ env.AUDIT_STATUS_MESSAGE }}
 
                       ---
 
