@@ -104,7 +104,13 @@ jobs:
             - name: Generate test summary and coverage
               if: ${{ github.event_name == 'pull_request' }}
               run: |
-                  TEST_SUMMARY=$(cat test-results.json | jq -r '{ total: .successes + .failures, passed: .successes, failed: .failures, pass_rate: if (.successes + .failures) > 0 then (.successes / (.successes + .failures) * 100 | round(2)) else 100 end }')
+                  TEST_SUMMARY=$(cat test-results.json | jq -r '
+                  {
+                    "total": (.successes + .failures),
+                    "passed": (.successes),
+                    "failed": (.failures),
+                    "pass_rate": (if (.successes + .failures) > 0 then (.successes / (.successes + .failures) * 100 | round(2)) else 100 end)
+                  }')
                   echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
