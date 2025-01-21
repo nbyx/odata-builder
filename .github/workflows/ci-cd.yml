@@ -146,8 +146,6 @@ jobs:
                       else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
                       else lines_insight="❌ Coverage needs improvement.";
 
-                      printf "| Metric      | Coverage | Insights                          |\n";
-                      printf "|-------------|----------|-----------------------------------|\n";
                       printf "| Statements  | %s       | %s |\n", $2, statements_insight;
                       printf "| Branches    | %s       | %s |\n", $3, branches_insight;
                       printf "| Functions   | %s       | %s |\n", $4, functions_insight;
