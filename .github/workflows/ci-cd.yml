@@ -115,7 +115,7 @@ jobs:
                   echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')" >> $GITHUB_ENV
-                  COVERAGE=$(npm run coverage:ci)
+                  COVERAGE=$(npm run coverage:ci | grep "All files" | awk -F'|' '{print "Statements: " $2 ", Branches: " $3 ", Functions: " $4 ", Lines: " $5}')
                   echo "COVERAGE<<EOF" >> $GITHUB_ENV
                   echo "$COVERAGE" >> $GITHUB_ENV
                   echo "EOF" >> $GITHUB_ENV
