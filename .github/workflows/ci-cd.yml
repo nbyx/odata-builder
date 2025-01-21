@@ -265,7 +265,7 @@ jobs:
                   }] | map(
                     "#### File: `\(.file)`\n" +
                     (.messages | map("- \(.severity) on line \(.line), column \(.column): \(.message) (\(.ruleId))") | join("\n"))
-                  ) | join("\n\n")')
+                  ) | join("\n\n")' | sed 's/%/%25/g; s/\n/%0A/g; s/\r/%0D/g')
 
                   echo "LINT_ERRORS=$ERROR_COUNT" >> $GITHUB_ENV
                   echo "LINT_WARNINGS=$WARNING_COUNT" >> $GITHUB_ENV
