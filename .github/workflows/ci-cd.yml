@@ -244,8 +244,8 @@ jobs:
                   ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
                   WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
 
-                                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
-                    file: .filePath,
+                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
+                    file: (.filePath | sub("^.*/"; "")),
                     messages: (
                       [.messages[] | {
                         severity: (if (.severity) == 2 then "🚨 Error" else "⚠️ Warning" end),
