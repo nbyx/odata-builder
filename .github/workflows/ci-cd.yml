@@ -179,9 +179,7 @@ jobs:
                       <details>
                       <summary>🔍 Click to expand</summary>
 
-                      ```plaintext
                       ${{ env.COVERAGE }}
-                      ```
 
                       </details>
 
