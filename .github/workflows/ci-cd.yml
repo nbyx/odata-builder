@@ -172,7 +172,7 @@ jobs:
               with:
                   header: '🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}'
                   message: |
-                      # 🚀 Test Results (Node ${{ matrix.node-version }})
+                      # 🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}
 
                       ## 🛠 **Summary**
                       | Metric         | Value                                   |
