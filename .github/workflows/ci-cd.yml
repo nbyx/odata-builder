@@ -180,7 +180,7 @@ jobs:
                       | **Total Tests**| 🧪 ${{ env.TEST_SUMMARY_TOTAL }}        |
                       | **Passed**     | ✅ ${{ env.TEST_SUMMARY_PASSED }}       |
                       | **Failed**     | ❌ ${{ env.TEST_SUMMARY_FAILED }}       |
-                      | **Pass Rate**  | **${{ env.TEST_SUMMARY_PASS_RATE }}%** |
+                      | **Pass Rate**  | **${{ env.TEST_SUMMARY_PASS_RATE }}** |
 
                       ## 📊 **Coverage Details**
                       <details>
