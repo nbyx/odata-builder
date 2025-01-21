@@ -264,34 +264,65 @@ jobs:
               if: ${{ github.event_name == 'pull_request' }}
               run: |
                   NPM_AUDIT_OUTPUT=$(cat npm-audit-results.json)
-                  if [[ -n "$NPM_AUDIT_OUTPUT" && $(echo "$NPM_AUDIT_OUTPUT" | jq '.error.code') ]]; then
+
+                  # Extrahiere die Schwachstellen aus dem JSON
+                  INFO=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.info')
+                  LOW=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.low')
+                  MODERATE=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.moderate')
+                  HIGH=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.high')
+                  CRITICAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical')
+                  TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.total')
+
+                  # Setze Umgebungsvariablen für die Ergebnisse
+                  echo "NPM_AUDIT_INFO=$INFO" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_LOW=$LOW" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_MODERATE=$MODERATE" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_HIGH=$HIGH" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_CRITICAL=$CRITICAL" >> $GITHUB_ENV
+                  echo "NPM_AUDIT_TOTAL=$TOTAL" >> $GITHUB_ENV
+
+                  # Setze eine Fehlerkennung basierend auf der Gesamtanzahl
+                  if [[ $TOTAL -gt 0 ]]; then
                     echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
                   else
                     echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
                   fi
 
             - name: Post npm audit results to PR
-              if: ${{ github.event_name == 'pull_request' && env.NPM_AUDIT_HAS_ERRORS == 'true' }}
+              if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: ⚠️ NPM Audit Findings
+                  header: 🔒 NPM Audit Findings
                   message: |
-                      # ⚠️ **NPM Audit Findings**
+                      # 🔒 **NPM Audit Findings**
 
-                      ## 🔍 **Summary**
-                      | Type                 | Description                                   |
-                      |----------------------|-----------------------------------------------|
-                      | **Status**           | 🚨 Potential vulnerabilities detected         |
-                      | **Details**          | Please review the attached audit log         |
+                      ## 🚦 **Vulnerability Summary**
+                      | **Severity**     | **Count**                           |
+                      |------------------|-------------------------------------|
+                      | 🟢 **Info**      | `${{ env.NPM_AUDIT_INFO }}`         |
+                      | 🟡 **Low**       | `${{ env.NPM_AUDIT_LOW }}`          |
+                      | 🟠 **Moderate**  | `${{ env.NPM_AUDIT_MODERATE }}`     |
+                      | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
+                      | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
 
-                      ## 📋 **Action Required**
-                      > **Take the following steps to resolve:**
-                      > 1. Analyze the `npm audit` log in the workflow artifacts.
-                      > 2. Address vulnerabilities by updating dependencies or applying patches.
-                      > 3. Confirm the resolution before merging this PR.
+                      ## ✅ **Status**
+                      {% if env.NPM_AUDIT_HAS_ERRORS == 'true' %}
+                      🚨 **Vulnerabilities detected!** Please address the issues listed above.  
+                      {% else %}
+                      🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉  
+                      {% endif %}
+
+                      ## 📦 **Dependency Overview**
+                      | **Dependency Type** | **Count**                        |
+                      |---------------------|----------------------------------|
+                      | 🏗️ **Production**   | `${{ env.NPM_AUDIT_PROD }}`      |
+                      | 🛠️ **Development**  | `${{ env.NPM_AUDIT_DEV }}`       |
+                      | 🎲 **Optional**     | `${{ env.NPM_AUDIT_OPTIONAL }}`  |
+                      | 🤝 **Peer**         | `${{ env.NPM_AUDIT_PEER }}`      |
+                      | 📦 **Total**        | `${{ env.NPM_AUDIT_TOTAL }}`     |
 
                       ---
-                      🔗 *View the full audit log in the workflow artifacts section.*
+                      > 🔗 *Generated automatically by the CI pipeline to keep your dependencies secure.*
                   operationType: upsert
 
     build:
