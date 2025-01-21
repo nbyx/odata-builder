@@ -109,12 +109,22 @@ jobs:
                     "total": (.numTotalTests),
                     "passed": (.numPassedTests),
                     "failed": (.numFailedTests),
-                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / (.numPassedTests + .numFailedTests) * 100 | floor) else 100 end)
+                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / .numTotalTests * 100 | floor) else 100 end)
                   }')
                   echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
-                  echo "TEST_SUMMARY_PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')" >> $GITHUB_ENV
+
+                  PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')
+                  if (( $(echo "$PASS_RATE == 100" | bc -l) )); then
+                    PASS_RATE_ICON="🟢"
+                    TEST_STATUS="✅ All tests passed"
+                  else
+                    PASS_RATE_ICON="🔴"
+                    TEST_STATUS="❌ Tests failed"
+                  fi
+                  echo "TEST_SUMMARY_PASS_RATE=${PASS_RATE_ICON} ${PASS_RATE}%" >> $GITHUB_ENV
+                  echo "TEST_STATUS=${TEST_STATUS}" >> $GITHUB_ENV
 
             - name: Generate test coverage summary with insights
               if: ${{ github.event_name == 'pull_request' }}
@@ -160,7 +170,7 @@ jobs:
               if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: 🚀 Test Results (Node ${{ matrix.node-version }})
+                  header: '🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}'
                   message: |
                       # 🚀 Test Results (Node ${{ matrix.node-version }})
 
@@ -181,7 +191,11 @@ jobs:
                       |-------------|----------|-----------------------------------|
                       ${{ env.COVERAGE }}
 
-                      </details>
+                      ---
+                      **Coverage insights are based on current thresholds.**  
+                      Adjust thresholds for stricter checks if needed.
+
+                        </details>
 
                       ---
                       > *Generated automatically by CI Pipeline*
@@ -329,7 +343,18 @@ jobs:
                   echo "NPM_AUDIT_PEER=$PEER" >> $GITHUB_ENV
                   echo "NPM_AUDIT_PEER_OPTIONAL=$PEER_OPTIONAL" >> $GITHUB_ENV
                   echo "NPM_AUDIT_DEP_TOTAL=$DEP_TOTAL" >> $GITHUB_ENV
+                  if [[ $CRITICAL -gt 0 || $HIGH -gt 0 ]]; then
+                    STATUS_ICON="🔴"
+                    STATUS_MESSAGE="**Critical vulnerabilities found! Immediate action required.**"
+                  elif [[ $MODERATE -gt 0 || $LOW -gt 0 ]]; then
+                    STATUS_ICON="🟡"
+                    STATUS_MESSAGE="**Some vulnerabilities detected. Please review the details below.**"
+                  else
+                    STATUS_ICON="🟢"
+                    STATUS_MESSAGE="**No vulnerabilities found. Excellent job keeping dependencies secure! 🎉**"
+                  fi
 
+                  echo "NPM_AUDIT_STATUS_ICON=$STATUS_ICON" >> $GITHUB_ENV
                   if [[ $TOTAL -gt 0 ]]; then
                     echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
                     echo "STATUS=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
@@ -355,8 +380,10 @@ jobs:
                       | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
                       | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
 
-                      ## ✅ **Status**
-                      ${{ env.STATUS }}
+                      ## {{ env.AUDIT_STATUS_ICON }} **Status**
+                      {{ env.AUDIT_STATUS_MESSAGE }}
+
+                      ---
 
                       ## 📦 **Dependency Overview**
                       | **Dependency Type** | **Count**                        |
