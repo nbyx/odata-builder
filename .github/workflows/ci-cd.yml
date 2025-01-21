@@ -116,47 +116,47 @@ jobs:
                   echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
                   echo "TEST_SUMMARY_PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')" >> $GITHUB_ENV
 
-                  - name: Generate test coverage summary with insights
-                  if: ${{ github.event_name == 'pull_request' }}
-                  run: |
-                    COVERAGE_OUTPUT=$(npm run coverage:ci | grep "All files" | awk -F'|' '
-                      {
-                        statements=$2+0;
-                        branches=$3+0;
-                        functions=$4+0;
-                        lines=$5+0;
+            - name: Generate test coverage summary with insights
+              if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                  COVERAGE_OUTPUT=$(npm run coverage:ci | grep "All files" | awk -F'|' '
+                    {
+                      statements=$2+0;
+                      branches=$3+0;
+                      functions=$4+0;
+                      lines=$5+0;
 
-                        if (statements == 100) statements_insight="🚀 Excellent coverage!";
-                        else if (statements >= 90) statements_insight="✅ Great coverage, keep it up!";
-                        else if (statements >= 75) statements_insight="⚠️ Good coverage, but improvements are possible.";
-                        else statements_insight="❌ Coverage needs improvement.";
+                      if (statements == 100) statements_insight="🚀 Excellent coverage!";
+                      else if (statements >= 90) statements_insight="✅ Great coverage, keep it up!";
+                      else if (statements >= 75) statements_insight="⚠️ Good coverage, but improvements are possible.";
+                      else statements_insight="❌ Coverage needs improvement.";
 
-                        if (branches == 100) branches_insight="🚀 Excellent coverage!";
-                        else if (branches >= 90) branches_insight="✅ Great coverage, keep it up!";
-                        else if (branches >= 75) branches_insight="⚠️ Good coverage, but improvements are possible.";
-                        else branches_insight="❌ Coverage needs improvement.";
+                      if (branches == 100) branches_insight="🚀 Excellent coverage!";
+                      else if (branches >= 90) branches_insight="✅ Great coverage, keep it up!";
+                      else if (branches >= 75) branches_insight="⚠️ Good coverage, but improvements are possible.";
+                      else branches_insight="❌ Coverage needs improvement.";
 
-                        if (functions == 100) functions_insight="🚀 Excellent coverage!";
-                        else if (functions >= 90) functions_insight="✅ Great coverage, keep it up!";
-                        else if (functions >= 75) functions_insight="⚠️ Good coverage, but improvements are possible.";
-                        else functions_insight="❌ Coverage needs improvement.";
+                      if (functions == 100) functions_insight="🚀 Excellent coverage!";
+                      else if (functions >= 90) functions_insight="✅ Great coverage, keep it up!";
+                      else if (functions >= 75) functions_insight="⚠️ Good coverage, but improvements are possible.";
+                      else functions_insight="❌ Coverage needs improvement.";
 
-                        if (lines == 100) lines_insight="🚀 Excellent coverage!";
-                        else if (lines >= 90) lines_insight="✅ Great coverage, keep it up!";
-                        else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
-                        else lines_insight="❌ Coverage needs improvement.";
+                      if (lines == 100) lines_insight="🚀 Excellent coverage!";
+                      else if (lines >= 90) lines_insight="✅ Great coverage, keep it up!";
+                      else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
+                      else lines_insight="❌ Coverage needs improvement.";
 
-                        printf "| Metric      | Coverage | Insights                          |\n";
-                        printf "|-------------|----------|-----------------------------------|\n";
-                        printf "| Statements  | %s       | %s |\n", $2, statements_insight;
-                        printf "| Branches    | %s       | %s |\n", $3, branches_insight;
-                        printf "| Functions   | %s       | %s |\n", $4, functions_insight;
-                        printf "| Lines       | %s       | %s |\n", $5, lines_insight;
-                      }')
+                      printf "| Metric      | Coverage | Insights                          |\n";
+                      printf "|-------------|----------|-----------------------------------|\n";
+                      printf "| Statements  | %s       | %s |\n", $2, statements_insight;
+                      printf "| Branches    | %s       | %s |\n", $3, branches_insight;
+                      printf "| Functions   | %s       | %s |\n", $4, functions_insight;
+                      printf "| Lines       | %s       | %s |\n", $5, lines_insight;
+                    }')
 
-                    echo "COVERAGE<<EOF" >> $GITHUB_ENV
-                    echo "$COVERAGE_OUTPUT" >> $GITHUB_ENV
-                    echo "EOF" >> $GITHUB_ENV
+                  echo "COVERAGE<<EOF" >> $GITHUB_ENV
+                  echo "$COVERAGE_OUTPUT" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
 
             - name: Post test summary and coverage to PR
               if: ${{ github.event_name == 'pull_request' }}
