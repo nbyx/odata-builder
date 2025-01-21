@@ -5,11 +5,15 @@ on:
         tags:
             - 'v*'
         branches:
-            - '**'
+            - main
     pull_request:
         branches:
-            - '**'
+            - main
     workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
     pr-checks:
@@ -29,9 +33,9 @@ jobs:
             - name: Check for tags in PR
               run: |
                   echo "Checking for tags on all commits in the PR..."
-                  git fetch --tags
+                  git fetch --tags --quiet
                   for COMMIT in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.sha }}); do
-                    if git tag --points-at $COMMIT | grep .; then
+                    if git tag --points-at $COMMIT | grep -q .; then
                       echo "Tag found on commit $COMMIT. Tags are not allowed in PRs."
                       exit 1
                     fi
@@ -41,22 +45,22 @@ jobs:
             - name: Check for required labels
               run: |
                   echo "Checking for required labels ('ready-for-review' or 'dependencies')..."
-                  curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                  if ! curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                     https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | \
-                    jq '.labels[].name' | grep -qE "(ready-for-review|dependencies)" || \
-                    (echo "PR must have either the 'ready-for-review' or 'dependencies' label." && exit 1)
+                    jq -e '.labels[].name | select(. == "ready-for-review" or . == "dependencies")' > /dev/null 2>&1; then
+                    echo "PR must have either the 'ready-for-review' or 'dependencies' label."
+                    exit 1
+                  fi
 
     check-secrets:
         runs-on: ubuntu-latest
         steps:
             - name: Skip for Dependabot
-              run: |
-                  if [[ "$GITHUB_ACTOR" == "dependabot[bot]" ]]; then
-                    echo "Skipping secret verification for Dependabot."
-                    exit 0
-                  fi
+              if: github.actor == 'dependabot[bot]'
+              run: echo "Skipping secret verification for Dependabot."
 
             - name: Verify required secrets
+              if: github.actor != 'dependabot[bot]'
               run: |
                   echo "Verifying required secrets..."
                   REQUIRED_SECRETS=("GITHUB_TOKEN" "NPM_TOKEN")
@@ -93,43 +97,50 @@ jobs:
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
             - name: Install dependencies
               run: npm ci
-            - name: Run tests with verbose output
+            - name: Run tests with coverage
               id: run-tests
-              run: npm run test -- --reporter=verbose --coverage | tee full-test-output.txt
+              run: npm run test -- --coverage --reporter=json --reporter=default --outputFile=test-results.json
 
-            - name: Filter relevant test results
+            - name: Generate test summary and coverage
               if: ${{ github.event_name == 'pull_request' }}
               run: |
-                  # Filter relevant test results and coverage report
-                  awk '
-                  /^ *Tests|^ *Test Files|^ *Start at|^ *Duration/ {print}
-                  /^% Coverage report from/ {print; cov=1; next}
-                  cov && /^[^-]*$/ {print}
-                  cov && /^$/ {cov=0}
-                  ' full-test-output.txt > filtered-test-output.txt
-              shell: bash
+                  TEST_SUMMARY=$(cat test-results.json | jq -r '{ total: .successes + .failures, passed: .successes, failed: .failures, pass_rate: if (.successes + .failures) > 0 then (.successes / (.successes + .failures) * 100 | round(2)) else 100 end }')
+                  echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
+                  echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
+                  echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
+                  echo "TEST_SUMMARY_PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')" >> $GITHUB_ENV
+                  COVERAGE=$(npm run coverage:ci)
+                  echo "COVERAGE<<EOF" >> $GITHUB_ENV
+                  echo "$COVERAGE" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
 
-            - name: Set filtered test results to environment variable
-              if: ${{ github.event_name == 'pull_request' }}
-              run: echo "FILTERED_RESULTS=$(cat filtered-test-output.txt)" >> $GITHUB_ENV
-
-            - name: Post filtered test results to PR
+            - name: Post test summary and coverage to PR
               if: ${{ github.event_name == 'pull_request' }}
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  header: Test Results
+                  header: Test Results (Node ${{ matrix.node-version }})
                   message: |
-                      Node.js Version: ${{ matrix.node-version }}
-                      ```shell
-                      ${{ env.FILTERED_RESULTS }}
+                      ### Test Results (Node ${{ matrix.node-version }})
+
+                      **Summary:**
+                      - Total Tests: ${{ env.TEST_SUMMARY_TOTAL }}
+                      - Passed: ${{ env.TEST_SUMMARY_PASSED }}
+                      - Failed: ${{ env.TEST_SUMMARY_FAILED }}
+                      - Pass Rate: **${{ env.TEST_SUMMARY_PASS_RATE }}%**
+
+                      <details><summary>Coverage Details</summary>
+                      ```text
+                      ${{ env.COVERAGE }}
                       ```
+                      </details>
+                  operationType: upsert
 
             - name: Upload full test output as artifact
               if: ${{ github.event_name == 'pull_request' }}
               uses: actions/upload-artifact@v3
               with:
-                  name: full-test-output-${{ matrix.node-version }}.txt
-                  path: full-test-output.txt
+                  name: full-test-output-${{ matrix.node-version }}
+                  path: test-results.json
 
     lint:
         needs: check-secrets
@@ -152,14 +163,63 @@ jobs:
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
             - name: Install dependencies
               run: npm ci
-            - name: Lint code
-              run: npm run lint
-            - name: PR Comment with Lint Results
+            - name: Run linting
+              id: eslint-check
+              run: npm run lint -- --format json --output-file eslint-results.json
+              continue-on-error: true # Allow the workflow to continue even if there are linting errors
+
+            - name: Load ESLint results
+              id: load-eslint-results
               if: ${{ github.event_name == 'pull_request' }}
-              uses: reviewdog/action-eslint@v1
+              uses: actions/github-script@v6
               with:
-                  reporter: github-pr-review
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const fs = require('fs');
+                      const resultsPath = 'eslint-results.json';
+                      if (fs.existsSync(resultsPath)) {
+                        const rawResults = fs.readFileSync(resultsPath, 'utf8');
+                        const results = JSON.parse(rawResults);
+                        const annotations = results.flatMap(fileResult =>
+                          fileResult.messages.map(message => ({
+                            path: fileResult.filePath.substring(process.env.GITHUB_WORKSPACE.length + 1),
+                            start_line: message.line,
+                            end_line: message.line,
+                            start_column: message.column,
+                            end_column: message.column,
+                            annotation_level: message.severity === 2 ? 'failure' : 'warning',
+                            message: `${message.message} (${message.ruleId})`,
+                            title: 'ESLint Violation',
+                          }))
+                        );
+                        core.setOutput('eslint_annotations', annotations);
+                      } else {
+                        core.setOutput('eslint_annotations', []);
+                      }
+
+            - name: Post ESLint results to PR
+              if: ${{ github.event_name == 'pull_request' && steps.load-eslint-results.outputs.eslint_annotations != '[]' }}
+              uses: actions/github-script@v6
+              with:
+                  script: |
+                      const annotations = JSON.parse(core.getOutput('eslint_annotations'));
+                      const conclusion = annotations.length > 0 ? 'failure' : 'success';
+                      const summary = annotations.length > 0
+                        ? `ESLint found ${annotations.length} areas for improvement. See the annotations below for details on how to align with our code style.`
+                        : 'ESLint found no issues. Great job keeping the code clean!';
+
+                      await github.rest.checks.create({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        name: 'ESLint Check',
+                        head_sha: context.payload.pull_request.head.sha,
+                        status: 'completed',
+                        conclusion: conclusion,
+                        output: {
+                          title: 'ESLint Results',
+                          summary: summary,
+                          annotations: annotations,
+                        },
+                      });
 
     audit:
         needs: check-secrets
@@ -179,8 +239,34 @@ jobs:
                       ${{ runner.os }}-node-
             - name: Install dependencies
               run: npm ci
-            - name: Audit dependencies
-              run: npm audit --production
+            - name: Run audit
+              id: npm-audit
+              run: npm audit --production --json > npm-audit-results.json
+              continue-on-error: true
+
+            - name: Check for audit errors
+              id: check-audit-errors
+              if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                  NPM_AUDIT_OUTPUT=$(cat npm-audit-results.json)
+                  if [[ -n "$NPM_AUDIT_OUTPUT" && $(echo "$NPM_AUDIT_OUTPUT" | jq '.error.code') ]]; then
+                    echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
+                  else
+                    echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
+                  fi
+
+            - name: Post npm audit results to PR
+              if: ${{ github.event_name == 'pull_request' && env.NPM_AUDIT_HAS_ERRORS == 'true' }}
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  header: NPM Audit Findings
+                  message: |
+                      ### :warning: NPM Audit Findings :warning:
+
+                      **Important:** npm audit has identified potential security vulnerabilities.
+
+                      Please review the full npm audit log in the workflow run artifacts for detailed information and remediation steps.
+                  operationType: upsert
 
     build:
         needs: [test, lint, audit]
@@ -227,10 +313,12 @@ jobs:
                   fi
 
             - name: Sanitize ref name
+              if: github.event_name == 'push'
               run: |
                   echo "SANITIZED_REF_NAME=${GITHUB_REF_NAME//\//_}" >> $GITHUB_ENV
 
             - name: Archive build artifacts
+              if: github.event_name == 'push'
               uses: actions/upload-artifact@v4
               with:
                   name: dist-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}
@@ -267,6 +355,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     request-approval:
         needs: [create-release]
+        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
         runs-on: ubuntu-latest
         environment:
             name: production
@@ -275,8 +364,8 @@ jobs:
               run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
 
     publish:
-        needs: [create-release]
-        if: github.base_ref == 'main'
+        needs: [request-approval]
+        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
