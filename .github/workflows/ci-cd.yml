@@ -244,7 +244,7 @@ jobs:
                   ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
                   WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
 
-                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
+                                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
                     file: .filePath,
                     messages: (
                       [.messages[] | {
@@ -269,7 +269,9 @@ jobs:
 
                   echo "LINT_ERRORS=$ERROR_COUNT" >> $GITHUB_ENV
                   echo "LINT_WARNINGS=$WARNING_COUNT" >> $GITHUB_ENV
-                  echo "LINT_DETAILS=$DETAILS" >> $GITHUB_ENV
+                  echo "LINT_DETAILS<<EOF" >> $GITHUB_ENV
+                  echo "$DETAILS" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
 
                   if [ "$ERROR_COUNT" -gt 0 ]; then
                     echo "LINT_STATUS=🚨 Issues Found" >> $GITHUB_ENV
