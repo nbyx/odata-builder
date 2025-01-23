@@ -1,14 +1,44 @@
-import { QueryFilter } from '../../types/filter/query-filter.type';
+import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
+import { isCombinedFilter } from './combined-filter-util';
+import {
+    getValueType,
+    isValidOperator,
+    isValidTransform,
+} from './filter-helper.util';
 
 export const isQueryFilter = <T>(filter: unknown): filter is QueryFilter<T> => {
-    return (
-        (!!filter &&
-            !!(filter as QueryFilter<T>).field &&
-            !!(filter as QueryFilter<T>).operator &&
-            (typeof (filter as QueryFilter<T>).value === 'string' ||
-                typeof (filter as QueryFilter<T>).value === 'boolean' ||
-                typeof (filter as QueryFilter<T>).value === 'number' ||
-                (filter as QueryFilter<T>).value instanceof Date)) ||
-        (filter as QueryFilter<T>).value === null
-    );
+    if (!filter || typeof filter !== 'object') return false;
+
+    const f = filter as Record<string, unknown>;
+
+    // Prüfung für Lambda-Filter
+    if ('lambdaOperator' in f) {
+        return (
+            typeof f['lambdaOperator'] === 'string' &&
+            (f['lambdaOperator'] === 'any' || f['lambdaOperator'] === 'all') &&
+            typeof f['field'] === 'string' &&
+            'expression' in f &&
+            (isCombinedFilter(f['expression']) ||
+                isQueryFilter(f['expression']))
+        );
+    }
+
+    // Prüfung für Basic-Filter
+    if ('field' in f && 'operator' in f && 'value' in f) {
+        const valueType = getValueType(f['value']);
+        if (valueType === 'unknown') return false;
+
+        if (!isValidOperator(valueType, f['operator'] as string)) return false;
+
+        if (
+            'transform' in f &&
+            !isValidTransform(valueType, f['transform'] as string[])
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    return false;
 };

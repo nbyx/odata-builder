@@ -1,16 +1,18 @@
 import { OrderByDescriptor } from 'src/query-builder/types/orderby/orderby-descriptor.type';
 
 export const toOrderByQuery = <T>(orderBy: OrderByDescriptor<T>[]) => {
-    if (orderBy.length === 0) return '';
+    if (!orderBy || orderBy.length === 0) return '';
 
-    const orderByFields = orderBy.reduce(
-        (prev, curr, index, array) =>
-            prev +
-            `${curr.field} ${curr.orderDirection}${
-                index < array.length - 1 ? ', ' : ''
-            }`,
-        '',
-    );
+    const orderByFields = orderBy
+        .filter(curr => curr && curr.field) // Filtere ungültige Einträge heraus
+        .reduce(
+            (prev, curr, index, array) =>
+                prev +
+                `${curr.field} ${curr.orderDirection ?? 'asc'}${
+                    index < array.length - 1 ? ', ' : ''
+                }`,
+            '',
+        );
 
-    return `$orderby=${orderByFields}`;
+    return orderByFields ? `$orderby=${orderByFields}` : '';
 };

@@ -42,3 +42,30 @@ describe('toSelectQuery', () => {
         expect(result).toBe('$select=');
     });
 });
+
+describe('toSelectQuery - Input Array Edge Cases', () => {
+    it('should handle array with duplicate select properties', () => {
+        const selectProps = ['test', 'test', 'test2'];
+        const result = toSelectQuery(selectProps);
+        expect(result).toBe('$select=test, test, test2');
+    });
+
+    it('should handle array with empty strings', () => {
+        const selectProps = ['test', '', 'test2'];
+        const result = toSelectQuery(selectProps);
+        expect(result).toBe('$select=test, , test2');
+    });
+
+    it('should handle array with null and undefined (though type should prevent)', () => {
+        const selectPropsWithNull = ['test', null, 'test2'];
+        const selectPropsWithUndefined = ['test', undefined, 'test2'];
+
+        const resultWithNull = toSelectQuery(selectPropsWithNull as string[]);
+        const resultWithUndefined = toSelectQuery(
+            selectPropsWithUndefined as string[],
+        ); // Explicit cast to any
+
+        expect(resultWithNull).toBe('$select=test, , test2');
+        expect(resultWithUndefined).toBe('$select=test, , test2');
+    });
+});

@@ -2,7 +2,11 @@ import { OrderByDescriptor } from './types/orderby/orderby-descriptor.type';
 import { QueryFilter } from './types/filter/query-filter.type';
 import { toOrderByQuery } from './utils/orderby/orderby-utils';
 import { toSelectQuery } from './utils/select/select-utils';
-import { toFilterQuery } from './utils/filter/filter-utils';
+import {
+    isBasicFilter,
+    isLambdaFilter,
+    toFilterQuery,
+} from './utils/filter/filter-utils';
 import { CombinedFilter } from './types/filter/combined-filter.type';
 import { ExpandFields } from './types/expand/expand-fields.type';
 import { toExpandQuery } from './utils/expand/expand-util';
@@ -11,6 +15,11 @@ import { toSkipQuery } from './utils/skip/skip-utils';
 import { QueryComponents } from './types/utils/util.types';
 import { SearchExpressionBuilder } from './builder/search-expression-builder';
 import { createSearchTerm } from './utils/search/search.utils';
+import { isCombinedFilter } from './utils/filter/combined-filter-util';
+import {
+    getValueType,
+    isValidOperator,
+} from './utils/filter/filter-helper.util';
 
 const countEntitiesQuery = '/$count';
 export class OdataQueryBuilder<T> {
@@ -56,8 +65,27 @@ export class OdataQueryBuilder<T> {
     ): this {
         if (filters.length === 0) return this;
 
-        if (filters.some(filter => !filter))
-            throw new Error('Invalid filter input');
+        for (const filter of filters) {
+            if (!filter) {
+                throw new Error('Invalid filter input');
+            }
+
+            if (isBasicFilter(filter)) {
+                const valueType = getValueType(filter.value);
+
+                if (!isValidOperator(valueType, filter.operator)) {
+                    throw new Error(
+                        `Invalid operator "${filter.operator}" for type "${valueType}"`,
+                    );
+                }
+            } else if (isLambdaFilter(filter)) {
+                // check this?
+            } else if (!isCombinedFilter(filter)) {
+                throw new Error(
+                    `Invalid filter input: ${JSON.stringify(filter)}`,
+                );
+            }
+        }
 
         return this.addComponent('filter', filters);
     }

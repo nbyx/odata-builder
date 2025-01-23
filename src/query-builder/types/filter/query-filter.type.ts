@@ -1,40 +1,56 @@
 import { Guid } from '../utils/util.types';
+import { CombinedFilter } from './combined-filter.type';
 
-export type QueryFilter<T> = { lambdaOperator?: 'any' | 'all' } & (
+export type QueryFilter<T> =
     | {
           field: FilterFields<T, boolean>;
           operator: FilterOperators<boolean>;
           value: boolean | null;
-          innerField?: LambdaFilterFields<T, boolean>;
       }
     | {
           field: FilterFields<T, string>;
           operator: FilterOperators<string>;
           value: string | null;
           ignoreCase?: boolean;
-          innerField?: LambdaFilterFields<T, string>;
           removeQuotes?: boolean;
+          transform?: StringTransform[];
       }
     | {
           field: FilterFields<T, Date>;
           operator: FilterOperators<Date>;
-          value: Date;
-          innerField?: LambdaFilterFields<T, Date>;
+          value: Date | null;
+          transform?: DateTransform[];
       }
     | {
           field: FilterFields<T, Guid>;
           operator: FilterOperators<Guid>;
           value: Guid | null;
           removeQuotes?: boolean;
-          innerField?: LambdaFilterFields<T, Guid>;
+          transform?: GuidTransform[];
       }
     | {
           field: FilterFields<T, number>;
           operator: FilterOperators<number>;
           value: number | null;
-          innerField?: LambdaFilterFields<T, number>;
+          transform?: NumberTransform[];
       }
-);
+    | {
+          [K in ArrayFields<T>]: {
+              field: K;
+              lambdaOperator: 'any' | 'all';
+              expression:
+                  | CombinedFilter<ArrayElement<T, K>>
+                  | QueryFilter<ArrayElement<T, K>>;
+          };
+      }[ArrayFields<T>];
+
+export type ArrayFields<T> = {
+    [K in keyof T]: T[K] extends Array<unknown> ? K : never;
+}[keyof T];
+
+export type ArrayElement<T, K extends ArrayFields<T>> = T[K] extends (infer U)[]
+    ? U
+    : never;
 
 export type FilterFields<T, VALUETYPE> = {
     [K in Extract<keyof T, string>]: T[K] extends Record<string, unknown>
@@ -83,21 +99,28 @@ export type LambdaFilterFields<T, VALUETYPE> = {
 
 export type GeneralFilterOperators = 'eq' | 'ne';
 
-export type StringFilterOperators = 'contains' | 'startswith' | 'endswith';
+export type StringFilterOperators =
+    | 'contains'
+    | 'startswith'
+    | 'endswith'
+    | 'substringof'
+    | 'indexof'
+    | 'concat';
+
+export type StringTransform = 'tolower' | 'toupper' | 'trim' | 'length';
+export type DateTransform =
+    | 'year'
+    | 'month'
+    | 'day'
+    | 'hour'
+    | 'minute'
+    | 'second';
+export type NumberTransform = 'round' | 'floor' | 'ceiling';
+export type GuidTransform = 'tolower';
 
 export type NumberFilterOperators = 'ge' | 'gt' | 'le' | 'lt';
 
 type DateFilterOperators = NumberFilterOperators;
-
-export type DateFilterFunctions =
-    | 'day'
-    | 'hour'
-    | 'minute'
-    | 'month'
-    | 'second'
-    | 'year';
-
-export type MathFilterFunctions = 'round' | 'floor' | 'ceiling';
 
 export type DependentFilterOperators<VALUETYPE> = VALUETYPE extends string
     ? StringFilterOperators
@@ -110,3 +133,8 @@ export type DependentFilterOperators<VALUETYPE> = VALUETYPE extends string
 export type FilterOperators<VALUETYPE> =
     | GeneralFilterOperators
     | DependentFilterOperators<VALUETYPE>;
+
+export interface FilterVisitor<T> {
+    visitQueryFilter(filter: QueryFilter<T>): string;
+    visitCombinedFilter(filter: CombinedFilter<T>): string;
+}

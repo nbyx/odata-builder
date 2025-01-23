@@ -68,25 +68,12 @@ describe('QueryFilter<T>', () => {
         assertType<QueryFilter<Item>>(filter);
     });
 
-    it('should allow lambda operator on array of primitives', () => {
-        type Item = { tags: string[] };
-        const filter: QueryFilter<Item> = {
-            field: 'tags',
-            operator: 'contains',
-            value: 'test',
-            lambdaOperator: 'any',
-        };
-        assertType<QueryFilter<Item>>(filter);
-    });
-
     it('should allow lambda operator with inner field on array of objects', () => {
         type Item = { items: { name: string }[] };
         const filter: QueryFilter<Item> = {
             field: 'items',
-            operator: 'contains',
-            value: 'test',
             lambdaOperator: 'any',
-            innerField: 'name',
+            expression: { field: 'name', operator: 'eq', value: 'test' },
         };
         assertType<QueryFilter<Item>>(filter);
     });
@@ -216,19 +203,6 @@ describe('FilterFields<T, VALUETYPE>', () => {
         >().not.toEqualTypeOf<'details/code'>();
     });
 
-    it('should not allow innerField for primitive array', () => {
-        type Item = { tags: string[] };
-        const filter: QueryFilter<Item> = {
-            field: 'tags',
-            operator: 'contains',
-            value: 'test',
-            lambdaOperator: 'any',
-            // @ts-expect-error - innerField is not allowed for primitive arrays
-            innerField: 'invalid',
-        };
-        void filter;
-    });
-
     it('should not allow filtering on object fields directly', () => {
         type Item = { details: { code: string } };
         const filter: QueryFilter<Item> = {
@@ -283,7 +257,14 @@ describe('LambdaFilterFields<T, VALUETYPE>', () => {
 describe('FilterOperators<VALUETYPE>', () => {
     it('should allow string operators for string values', () => {
         expectTypeOf<FilterOperators<string>>().toEqualTypeOf<
-            'eq' | 'ne' | 'contains' | 'startswith' | 'endswith'
+            | 'eq'
+            | 'ne'
+            | 'contains'
+            | 'startswith'
+            | 'endswith'
+            | 'substringof'
+            | 'indexof'
+            | 'concat'
         >();
     });
 
