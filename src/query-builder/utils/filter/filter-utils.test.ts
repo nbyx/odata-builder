@@ -188,8 +188,12 @@ describe('toFilterQuery', () => {
                     lambdaOperator: 'any',
                     expression: {
                         field: '',
-                        operator: 'contains',
-                        value: 'test',
+                        function: {
+                            type: '',
+                            value: ['test'],
+                        },
+                        operator: 'eq',
+                        value: 'true',
                     },
                 },
             ];
@@ -238,12 +242,6 @@ describe('toFilterQuery - Extended Operator and Edge Cases', () => {
         it.each([
             ['eq', 'test', `$filter=name eq 'test'`],
             ['ne', 'test', `$filter=name ne 'test'`],
-            ['contains', 'test', `$filter=contains(name, 'test')`],
-            ['startswith', 'test', `$filter=startswith(name, 'test')`],
-            ['endswith', 'test', `$filter=endswith(name, 'test')`],
-            ['substringof', 'test', `$filter=substringof(name, 'test')`], // Note: substringof order is different in OData
-            ['indexof', 'test', `$filter=indexof(name, 'test')`],
-            ['concat', 'test', `$filter=concat(name, 'test') eq 'result'`], // Example, adjust as needed for concat
         ])(
             'should handle string operator "%s"',
             (operator, value, expectedQuery) => {
@@ -362,9 +360,9 @@ describe('toFilterQuery - Extended Operator and Edge Cases', () => {
                     logic: 'or',
                     filters: [{ field: 'age', operator: 'gt', value: 20 }],
                 },
-                { field: 'name', operator: 'contains', value: 'John' },
+                { field: 'name', operator: 'eq', value: 'John' },
             ];
-            const expectedQuery = `$filter=isActive eq true and (age gt 20) and contains(name, 'John')`;
+            const expectedQuery = `$filter=isActive eq true and (age gt 20) and name eq 'John'`;
             expect(toFilterQuery(filters)).toBe(expectedQuery);
         });
     });

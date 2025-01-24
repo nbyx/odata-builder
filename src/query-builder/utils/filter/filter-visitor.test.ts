@@ -212,3 +212,193 @@ describe('ODataFilterVisitor', () => {
         });
     });
 });
+
+describe('ODataFilterVisitor with Functions', () => {
+    type ItemType = {
+        id: string;
+        isActive: boolean;
+        age: number;
+        tags: string[];
+        details: { name: string; value: number };
+        createdAt: Date;
+    };
+
+    let visitor: ODataFilterVisitor<ItemType>;
+
+    beforeEach(() => {
+        visitor = new ODataFilterVisitor<ItemType>();
+    });
+
+    describe('visitBasicFilter with functions', () => {
+        it('should handle a string concat function', () => {
+            const filter: QueryFilter<ItemType> = {
+                function: {
+                    type: 'concat',
+                    values: ['Hello'],
+                },
+                field: 'details/name',
+                operator: 'eq',
+                value: 'Hello John',
+            };
+
+            const result = visitor.visitBasicFilter(filter);
+
+            expect(result).toBe(
+                "concat(details/name, 'Hello') eq 'Hello John'",
+            );
+        });
+
+        it('should handle an arithmetic add function for numbers', () => {
+            const filter: QueryFilter<ItemType> = {
+                function: {
+                    type: 'add',
+                    operand: 10,
+                },
+                field: 'age',
+                operator: 'eq',
+                value: 30,
+            };
+
+            const result = visitor.visitBasicFilter(filter);
+
+            expect(result).toBe('age add 10 eq 30');
+        });
+
+        it('should handle a now function for dates', () => {
+            const filter: QueryFilter<ItemType> = {
+                function: {
+                    type: 'now',
+                },
+                field: 'createdAt',
+                operator: 'gt',
+                value: new Date('2023-01-01'),
+            };
+
+            const result = visitor.visitBasicFilter(filter);
+
+            expect(result).toBe('now() gt 2023-01-01T00:00:00.000Z');
+        });
+
+        it('should throw an error for an invalid function definition', () => {
+            const filter = {
+                function: {
+                    type: 'add',
+                },
+                field: 'age',
+                operator: 'eq',
+                value: 30,
+            } as unknown as QueryFilter<ItemType>;
+
+            expect(() => visitor.visitBasicFilter(filter)).toThrow(
+                /Invalid function definition/,
+            );
+        });
+    });
+
+    describe('visitCombinedFilter with functions', () => {
+        it('should handle combined filters with functions', () => {
+            const filter: CombinedFilter<ItemType> = {
+                logic: 'and',
+                filters: [
+                    {
+                        function: {
+                            type: 'add',
+                            operand: 10,
+                        },
+                        field: 'age',
+                        operator: 'eq',
+                        value: 30,
+                    },
+                    {
+                        function: {
+                            type: 'concat',
+                            values: ['Hello'],
+                        },
+                        field: 'details/name',
+                        operator: 'eq',
+                        value: 'Hello John',
+                    },
+                ],
+            };
+
+            const result = visitor.visitCombinedFilter(filter);
+
+            expect(result).toBe(
+                "(age add 10 eq 30 and concat(details/name, 'Hello') eq 'Hello John')",
+            );
+        });
+
+        it('should handle nested combined filters with functions', () => {
+            const filter: CombinedFilter<ItemType> = {
+                logic: 'or',
+                filters: [
+                    {
+                        function: {
+                            type: 'mul',
+                            operand: 2,
+                        },
+                        field: 'age',
+                        operator: 'gt',
+                        value: 40,
+                    },
+                    {
+                        logic: 'and',
+                        filters: [
+                            {
+                                field: 'createdAt',
+                                operator: 'lt',
+                                value: new Date('2023-01-01'),
+                            },
+                            {
+                                field: 'isActive',
+                                operator: 'eq',
+                                value: true,
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            const result = visitor.visitCombinedFilter(filter);
+
+            expect(result).toBe(
+                '(age mul 2 gt 40 or (createdAt lt 2023-01-01T00:00:00.000Z and isActive eq true))',
+            );
+        });
+    });
+
+    describe('Integration Tests', () => {
+        it('should handle mixed filters with functions and basic filters', () => {
+            const filter: CombinedFilter<ItemType> = {
+                logic: 'and',
+                filters: [
+                    {
+                        function: {
+                            type: 'add',
+                            operand: 10,
+                        },
+                        field: 'age',
+                        operator: 'eq',
+                        value: 30,
+                    },
+                    { field: 'isActive', operator: 'eq', value: true },
+                    {
+                        function: {
+                            type: 'concat',
+                            values: ['Hello'],
+                        },
+                        field: 'details/name',
+                        operator: 'eq',
+                        value: 'Hello John',
+                    },
+                ],
+            };
+
+            const result = visitor.visitCombinedFilter(filter);
+
+            expect(result).toBe(
+                "(age add 10 eq 30 and isActive eq true and concat(details/name, 'Hello') eq 'Hello John')",
+            );
+        });
+    });
+});

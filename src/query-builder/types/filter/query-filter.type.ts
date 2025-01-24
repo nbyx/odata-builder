@@ -2,47 +2,131 @@ import { Guid } from '../utils/util.types';
 import { CombinedFilter } from './combined-filter.type';
 
 export type QueryFilter<T> =
+    | StringQueryFilter<T>
+    | NumberQueryFilter<T>
+    | DateQueryFilter<T>
+    | GuidQueryFilter<T>
+    | BooleanQueryFilter<T>
+    | LambdaFilter<T>;
+
+// String-Filter
+interface StringQueryFilter<T> extends BaseFilter<T, string> {
+    operator: StringFilterOperators;
+    ignoreCase?: boolean;
+    removeQuotes?: boolean;
+    function?: StringFunctionDefinition<T>;
+    transform?: StringTransform[];
+}
+
+// Number-Filter
+interface NumberQueryFilter<T> extends BaseFilter<T, number> {
+    operator: NumberFilterOperators | GeneralFilterOperators;
+    function?: ArithmeticFunctionDefinition<T>;
+    transform?: NumberTransform[];
+}
+
+// Date-Filter
+interface DateQueryFilter<T> extends BaseFilter<T, Date> {
+    operator: DateFilterOperators | GeneralFilterOperators;
+    function?: DateFunctionDefinition<T>;
+    transform?: DateTransform[];
+}
+
+// Guid-Filter
+interface GuidQueryFilter<T> extends BaseFilter<T, Guid> {
+    operator: GeneralFilterOperators;
+    removeQuotes?: boolean;
+    transform?: GuidTransform[];
+}
+
+// Boolean-Filter
+interface BooleanQueryFilter<T> extends BaseFilter<T, boolean> {
+    operator: GeneralFilterOperators;
+}
+
+// Base Filter
+interface BaseFilter<T, V> {
+    field: FilterFields<T, V>;
+    operator: FilterOperators<V>;
+    value: V | null;
+}
+
+type LambdaFilter<T> = {
+    [K in ArrayFields<T>]: {
+        field: K;
+        lambdaOperator: 'any' | 'all';
+        expression:
+            | QueryFilter<ArrayElement<T, K>>
+            | CombinedFilter<ArrayElement<T, K>>;
+    };
+}[ArrayFields<T>];
+
+export type SpecificFunctionDefinition<T, V> = V extends string
+    ? StringFunctionDefinition<T>
+    : V extends number
+      ? ArithmeticFunctionDefinition<T>
+      : V extends Date
+        ? DateFunctionDefinition<T>
+        : never;
+
+export type StringFunctionDefinition<T> =
     | {
-          field: FilterFields<T, boolean>;
-          operator: FilterOperators<boolean>;
-          value: boolean | null;
+          type: 'concat';
+          values: (string | FieldReference<T, string>)[];
       }
     | {
-          field: FilterFields<T, string>;
-          operator: FilterOperators<string>;
-          value: string | null;
-          ignoreCase?: boolean;
-          removeQuotes?: boolean;
-          transform?: StringTransform[];
+          type: 'contains';
+          value: string | FieldReference<T, string>;
       }
     | {
-          field: FilterFields<T, Date>;
-          operator: FilterOperators<Date>;
-          value: Date | null;
-          transform?: DateTransform[];
+          type: 'endswith';
+          value: string | FieldReference<T, string>;
       }
     | {
-          field: FilterFields<T, Guid>;
-          operator: FilterOperators<Guid>;
-          value: Guid | null;
-          removeQuotes?: boolean;
-          transform?: GuidTransform[];
+          type: 'indexof';
+          value: string | FieldReference<T, string>;
       }
     | {
-          field: FilterFields<T, number>;
-          operator: FilterOperators<number>;
-          value: number | null;
-          transform?: NumberTransform[];
+          type: 'length';
       }
     | {
-          [K in ArrayFields<T>]: {
-              field: K;
-              lambdaOperator: 'any' | 'all';
-              expression:
-                  | CombinedFilter<ArrayElement<T, K>>
-                  | QueryFilter<ArrayElement<T, K>>;
-          };
-      }[ArrayFields<T>];
+          type: 'startswith';
+          value: string | FieldReference<T, string>;
+      }
+    | {
+          type: 'substring';
+          start: number | FieldReference<T, number>;
+          length?: number | FieldReference<T, number>;
+      };
+
+type ArithmeticOperator = 'add' | 'sub' | 'mul' | 'div' | 'mod';
+
+export type ArithmeticFunctionDefinition<T> = {
+    type: ArithmeticOperator;
+    operand: number | FieldReference<T, number>;
+};
+
+export type DateFunctionDefinition<T> =
+    | {
+          type: 'now';
+      }
+    | {
+          type: 'date';
+          field: FieldReference<T, Date>;
+      }
+    | {
+          type: 'time';
+          field: FieldReference<T, Date>;
+      };
+
+export type FieldReference<T, V extends string | number | Date | boolean> = {
+    fieldReference: FilterFields<T, V>;
+};
+
+export type SupportedFunction<T> =
+    | StringFunctionDefinition<T>
+    | ArithmeticFunctionDefinition<T>
+    | DateFunctionDefinition<T>;
 
 export type ArrayFields<T> = {
     [K in keyof T]: T[K] extends Array<unknown> ? K : never;
@@ -99,13 +183,7 @@ export type LambdaFilterFields<T, VALUETYPE> = {
 
 export type GeneralFilterOperators = 'eq' | 'ne';
 
-export type StringFilterOperators =
-    | 'contains'
-    | 'startswith'
-    | 'endswith'
-    | 'substringof'
-    | 'indexof'
-    | 'concat';
+export type StringFilterOperators = GeneralFilterOperators;
 
 export type StringTransform = 'tolower' | 'toupper' | 'trim' | 'length';
 export type DateTransform =

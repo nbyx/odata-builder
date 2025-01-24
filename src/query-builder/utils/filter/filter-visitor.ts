@@ -1,14 +1,17 @@
-import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
-import {
-    ArrayElement,
-    ArrayFields,
-    DateTransform,
-    QueryFilter,
-    StringFilterOperators,
-} from 'src/query-builder/types/filter/query-filter.type';
+import { CombinedFilter } from '../../types/filter/combined-filter.type';
+
 import { isCombinedFilter } from './combined-filter-util';
 import { isBasicFilter } from './filter-utils';
 import { getValueType, isValidOperator } from './filter-helper.util';
+import {
+    ArithmeticFunctionDefinition,
+    ArrayElement,
+    ArrayFields,
+    DateTransform,
+    FieldReference,
+    QueryFilter,
+    SupportedFunction,
+} from '../../types/filter/query-filter.type';
 
 interface FilterVisitor<T> {
     visitBasicFilter(filter: QueryFilter<T>): string;
@@ -23,7 +26,12 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         }
 
         if (filter.value === null) {
-            return `${filter.field} ${filter.operator} null`;
+            const leftSide =
+                'function' in filter && filter.function
+                    ? this.processFunction(filter.function, filter.field)
+                    : this.getTransformedField(filter);
+
+            return `${leftSide} ${filter.operator} null`;
         }
 
         const valueType = getValueType(filter.value);
@@ -44,9 +52,13 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                 );
                 return `${transformedField} ${filter.operator} ${transformedValue}`;
             } else {
+                const leftSide =
+                    'function' in filter && filter.function
+                        ? this.processFunction(filter.function, filter.field)
+                        : transformedField;
                 // Konvertiere Datum in ISO-String
                 const isoDate = filter.value.toISOString();
-                return `${transformedField} ${filter.operator} ${isoDate}`;
+                return `${leftSide} ${filter.operator} ${isoDate}`;
             }
         }
 
@@ -60,15 +72,20 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                 ? transformedValue
                 : `'${transformedValue}'`;
 
-            if (this.isStringFilterFunction(filter.operator)) {
-                return `${filter.operator}(${transformedField}, ${value})`;
-            }
+            const leftSide =
+                'function' in filter && filter.function
+                    ? this.processFunction(filter.function, filter.field)
+                    : transformedField;
 
-            return `${transformedField} ${filter.operator} ${value}`;
+            return `${leftSide} ${filter.operator} ${value}`;
         }
 
         if (typeof filter.value === 'number') {
-            return `${transformedField} ${filter.operator} ${filter.value}`;
+            const leftSide =
+                'function' in filter && filter.function
+                    ? this.processFunction(filter.function, filter.field)
+                    : transformedField;
+            return `${leftSide} ${filter.operator} ${filter.value}`;
         }
 
         return `${transformedField} ${filter.operator} ${String(filter.value)}`;
@@ -215,6 +232,113 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         }, +date); // Datum in Timestamp umwandeln
     }
 
+    private processFunction<T>(
+        func: SupportedFunction<T>,
+        field: string,
+    ): string {
+        if (!func.type) {
+            throw new Error(
+                'Invalid function definition: missing "type" property',
+            );
+        }
+
+        switch (func.type) {
+            case 'concat': {
+                const args = [
+                    field,
+                    ...func.values.map(v => this.formatValue(v)),
+                ];
+                return `concat(${args.join(', ')})`;
+            }
+            case 'contains':
+                return `contains(${field}, ${this.formatValue(func.value)})`;
+
+            case 'endswith':
+                return `endswith(${field}, ${this.formatValue(func.value)})`;
+
+            case 'indexof':
+                return `indexof(${field}, ${this.formatValue(func.value)})`;
+
+            case 'length':
+                return `length(${field})`;
+
+            case 'startswith':
+                return `startswith(${field}, ${this.formatValue(func.value)})`;
+
+            case 'substring': {
+                const args = [func.start];
+                if (func.length !== undefined) {
+                    args.push(func.length);
+                }
+                return `substring(${field}, ${args.map(arg => this.formatValue(arg)).join(', ')})`;
+            }
+
+            case 'add':
+            case 'sub':
+            case 'mul':
+            case 'div':
+            case 'mod':
+                return this.createArithmeticHandler<T>(func.type)(func, field);
+
+            case 'now':
+                return 'now()';
+
+            case 'date':
+                return `date(${this.resolveField(func.field)})`;
+
+            case 'time':
+                return `time(${this.resolveField(func.field)})`;
+
+            default:
+                throw new Error(
+                    `Unsupported function type: ${(func as { type: string }).type}`,
+                );
+        }
+    }
+
+    private resolveField<T, V extends string | number | Date | boolean>(
+        field: FieldReference<T, V> | string,
+    ): string {
+        if (typeof field === 'string') {
+            return field;
+        }
+
+        if ('/' in field) {
+            return field.fieldReference;
+        }
+
+        throw new Error('Unsupported FieldReference type');
+    }
+
+    private createArithmeticHandler<T>(
+        operator: 'add' | 'sub' | 'mul' | 'div' | 'mod',
+    ) {
+        return (
+            func: ArithmeticFunctionDefinition<T>,
+            field: string,
+        ): string => {
+            if (!('operand' in func)) {
+                throw new Error(
+                    `Invalid function definition: missing "operand" property`,
+                );
+            }
+            return `${field} ${operator} ${this.formatValue(func.operand)}`;
+        };
+    }
+
+    private formatValue(value: unknown): string {
+        if (typeof value === 'string') {
+            return `'${value}'`;
+        }
+        if (value instanceof Date) {
+            return `${value.toISOString()}`;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        throw new Error(`Unsupported value type: ${typeof value}`);
+    }
+
     private getPrefixedField(
         field: string | number | symbol,
         prefix?: string,
@@ -222,20 +346,6 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         const fieldStr = String(field);
         if (!prefix) return fieldStr;
         return fieldStr ? `${prefix}/${fieldStr}` : prefix;
-    }
-
-    private isStringFilterFunction(x: unknown): x is StringFilterOperators {
-        return (
-            typeof x === 'string' &&
-            (x === 'contains' ||
-                x === 'startswith' ||
-                x === 'endswith' ||
-                x === 'startswith' ||
-                x === 'endswith' ||
-                x === 'substringof' ||
-                x === 'indexof' ||
-                x === 'concat')
-        );
     }
 
     private validateOperator(type: string, operator: string): void {
