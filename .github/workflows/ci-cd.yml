@@ -95,8 +95,24 @@ jobs:
                   key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
                   restore-keys: |
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
+            - name: Check for package-lock and package.json consistency
+              id: check-lockfile
+              run: |
+                  if ! npm ci --dry-run > /dev/null 2>&1; then
+                      echo "Lockfile and package.json are not in sync. Using 'npm install' instead."
+                      echo "USE_INSTALL=true" >> $GITHUB_ENV
+                  else
+                      echo "USE_INSTALL=false" >> $GITHUB_ENV
+                  fi
+
             - name: Install dependencies
-              run: npm ci
+              run: |
+                  if [ "$USE_INSTALL" = "true" ]; then
+                      npm install
+                  else
+                      npm ci
+                  fi
+
             - name: Run tests with coverage
               id: run-tests
               run: npm run test -- --coverage --reporter=json --reporter=default --outputFile=test-results.json
@@ -228,8 +244,23 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-node-${{ matrix.node-version }}-
 
+            - name: Check for package-lock and package.json consistency
+              id: check-lockfile
+              run: |
+                  if ! npm ci --dry-run > /dev/null 2>&1; then
+                      echo "Lockfile and package.json are not in sync. Using 'npm install' instead."
+                      echo "USE_INSTALL=true" >> $GITHUB_ENV
+                  else
+                      echo "USE_INSTALL=false" >> $GITHUB_ENV
+                  fi
+
             - name: Install dependencies
-              run: npm ci
+              run: |
+                  if [ "$USE_INSTALL" = "true" ]; then
+                      npm install
+                  else
+                      npm ci
+                  fi
 
             - name: Run linting
               id: eslint-check
@@ -327,8 +358,23 @@ jobs:
                   key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
                   restore-keys: |
                       ${{ runner.os }}-node-
+            - name: Check for package-lock and package.json consistency
+              id: check-lockfile
+              run: |
+                  if ! npm ci --dry-run > /dev/null 2>&1; then
+                      echo "Lockfile and package.json are not in sync. Using 'npm install' instead."
+                      echo "USE_INSTALL=true" >> $GITHUB_ENV
+                  else
+                      echo "USE_INSTALL=false" >> $GITHUB_ENV
+                  fi
+
             - name: Install dependencies
-              run: npm ci
+              run: |
+                  if [ "$USE_INSTALL" = "true" ]; then
+                      npm install
+                  else
+                      npm ci
+                  fi
             - name: Run audit
               id: npm-audit
               run: npm audit --production --json > npm-audit-results.json
@@ -446,8 +492,23 @@ jobs:
                   key: ${{ runner.os }}-dist-${{ github.sha }}
                   restore-keys: |
                       ${{ runner.os }}-dist-
+            - name: Check for package-lock and package.json consistency
+              id: check-lockfile
+              run: |
+                  if ! npm ci --dry-run > /dev/null 2>&1; then
+                      echo "Lockfile and package.json are not in sync. Using 'npm install' instead."
+                      echo "USE_INSTALL=true" >> $GITHUB_ENV
+                  else
+                      echo "USE_INSTALL=false" >> $GITHUB_ENV
+                  fi
+
             - name: Install dependencies
-              run: npm ci
+              run: |
+                  if [ "$USE_INSTALL" = "true" ]; then
+                      npm install
+                  else
+                      npm ci
+                  fi
             - name: Build
               run: npm run build
             - name: Prepare package for npm
