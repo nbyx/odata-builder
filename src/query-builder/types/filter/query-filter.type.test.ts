@@ -4,6 +4,7 @@ import {
     FilterFields,
     LambdaFilterFields,
     FilterOperators,
+    ArithmeticFunctionDefinition,
 } from './query-filter.type';
 import { Guid } from '../utils/util.types';
 
@@ -68,25 +69,12 @@ describe('QueryFilter<T>', () => {
         assertType<QueryFilter<Item>>(filter);
     });
 
-    it('should allow lambda operator on array of primitives', () => {
-        type Item = { tags: string[] };
-        const filter: QueryFilter<Item> = {
-            field: 'tags',
-            operator: 'contains',
-            value: 'test',
-            lambdaOperator: 'any',
-        };
-        assertType<QueryFilter<Item>>(filter);
-    });
-
     it('should allow lambda operator with inner field on array of objects', () => {
         type Item = { items: { name: string }[] };
         const filter: QueryFilter<Item> = {
             field: 'items',
-            operator: 'contains',
-            value: 'test',
             lambdaOperator: 'any',
-            innerField: 'name',
+            expression: { field: 'name', operator: 'eq', value: 'test' },
         };
         assertType<QueryFilter<Item>>(filter);
     });
@@ -216,19 +204,6 @@ describe('FilterFields<T, VALUETYPE>', () => {
         >().not.toEqualTypeOf<'details/code'>();
     });
 
-    it('should not allow innerField for primitive array', () => {
-        type Item = { tags: string[] };
-        const filter: QueryFilter<Item> = {
-            field: 'tags',
-            operator: 'contains',
-            value: 'test',
-            lambdaOperator: 'any',
-            // @ts-expect-error - innerField is not allowed for primitive arrays
-            innerField: 'invalid',
-        };
-        void filter;
-    });
-
     it('should not allow filtering on object fields directly', () => {
         type Item = { details: { code: string } };
         const filter: QueryFilter<Item> = {
@@ -283,7 +258,14 @@ describe('LambdaFilterFields<T, VALUETYPE>', () => {
 describe('FilterOperators<VALUETYPE>', () => {
     it('should allow string operators for string values', () => {
         expectTypeOf<FilterOperators<string>>().toEqualTypeOf<
-            'eq' | 'ne' | 'contains' | 'startswith' | 'endswith'
+            | 'eq'
+            | 'ne'
+            | 'contains'
+            | 'startswith'
+            | 'endswith'
+            | 'substringof'
+            | 'indexof'
+            | 'concat'
         >();
     });
 
@@ -317,5 +299,362 @@ describe('FilterOperators<VALUETYPE>', () => {
     it('should not allow fields of non-array types', () => {
         type Item = { name: string };
         expectTypeOf<LambdaFilterFields<Item, string>>().toEqualTypeOf<never>();
+    });
+});
+
+describe('QueryFilter<T> with functions', () => {
+    it('should allow string concat function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'concat',
+                values: ['Hello', 'World'],
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'HelloWorld',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string contains function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'contains',
+                value: 'Hello',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'true',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string endswith function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'endswith',
+                value: 'World',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'true',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string indexof function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'indexof',
+                value: 'Hello',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: '-1',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string length function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'length',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: '5',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string startswith function', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'startswith',
+                value: 'Hello',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'true',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string substring function (start only)', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'substring',
+                start: 1,
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'ello',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should allow string substring function (start and length)', () => {
+        type ItemType = { name: string };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'substring',
+                start: 1,
+                length: 3,
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'ell',
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should enforce correct operator for string functions', () => {
+        type ItemType = { name: string };
+        const validFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'contains',
+                value: 'Hello',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'true',
+        };
+        assertType<QueryFilter<ItemType>>(validFilter);
+
+        // @ts-expect-error - Invalid operator for string function return type
+        const invalidFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'contains',
+                value: 'Hello',
+            },
+            field: 'name',
+            operator: 'gt',
+            value: true,
+        };
+        void invalidFilter;
+    });
+
+    // Field and Function Matching
+    it('should enforce matching field and function types for string functions', () => {
+        type ItemType = { name: string; price: number };
+
+        const validFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'startswith',
+                value: 'Test',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'true',
+        };
+        assertType<QueryFilter<ItemType>>(validFilter);
+
+        const invalidFilter: QueryFilter<ItemType> = {
+            function: {
+                // @ts-expect-error - Field does not match function return type
+                type: 'startswith',
+                value: 'Test',
+            },
+            field: 'price',
+            operator: 'eq',
+            value: 'true',
+        };
+        void invalidFilter;
+    });
+
+    // Edge Cases
+    it('should handle empty function values gracefully', () => {
+        type ItemType = { name: string };
+        const invalidFilter: QueryFilter<ItemType> = {
+            // @ts-expect-error - Missing required function properties
+            function: {
+                type: 'concat',
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'Hello',
+        };
+        void invalidFilter;
+    });
+
+    it('should not allow functions for unsupported field types', () => {
+        type ItemType = { name: string; price: number };
+        const invalidFilter: QueryFilter<ItemType> = {
+            function: {
+                // @ts-expect-error - Field does not support string function
+                type: 'concat',
+                values: ['Hello', 'World'],
+            },
+            field: 'price',
+            operator: 'eq',
+            value: 'HelloWorld',
+        };
+        void invalidFilter;
+    });
+
+    // Date Functions
+    it('should allow date function (now)', () => {
+        type ItemType = { createdAt: Date };
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'now',
+            },
+            field: 'createdAt',
+            operator: 'gt',
+            value: new Date(),
+        };
+        assertType<QueryFilter<ItemType>>(filter);
+    });
+
+    it('should enforce correct operator for date functions', () => {
+        type ItemType = { createdAt: Date };
+        const validFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'now',
+            },
+            field: 'createdAt',
+            operator: 'gt',
+            value: new Date(),
+        };
+        assertType<QueryFilter<ItemType>>(validFilter);
+        // @ts-expect-error - Invalid operator for date function return type
+        const invalidFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'now',
+            },
+            field: 'createdAt',
+
+            operator: 'contains',
+            value: new Date(),
+        };
+        void invalidFilter;
+    });
+
+    // Field and Function Matching
+    it('should enforce matching field and function types', () => {
+        type ItemType = { name: string; price: number; createdAt: Date };
+
+        const validStringFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'concat',
+                values: ['Hello', { fieldReference: 'name' }],
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 'Hello World',
+        };
+        assertType<QueryFilter<ItemType>>(validStringFilter);
+
+        const invalidStringFilter: QueryFilter<ItemType> = {
+            function: {
+                // @ts-expect-error - Field does not match function return type
+                type: 'concat',
+                values: ['Hello', { fieldReference: 'name' }],
+            },
+            field: 'price',
+            operator: 'eq',
+            value: 'Hello World',
+        };
+        void invalidStringFilter;
+
+        const validNumberFilter: QueryFilter<ItemType> = {
+            function: {
+                type: 'add',
+                operand: 10,
+            },
+            field: 'price',
+            operator: 'eq',
+            value: 110,
+        };
+        assertType<QueryFilter<ItemType>>(validNumberFilter);
+
+        const invalidNumberFilter: QueryFilter<ItemType> = {
+            function: {
+                // @ts-expect-error - Field does not match function return type
+                type: 'add',
+                operand: 10,
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 110,
+        };
+        void invalidNumberFilter;
+    });
+
+    // Edge Cases
+    it('should handle empty function values gracefully', () => {
+        type ItemType = { name: string };
+        const invalidFilter: QueryFilter<ItemType> = {
+            // @ts-expect-error - Missing required function properties
+            function: {},
+            field: 'name',
+            operator: 'eq',
+            value: 'Hello',
+        };
+        void invalidFilter;
+    });
+
+    it('should not allow functions for fields without matching types', () => {
+        type ItemType = { name: string; price: number };
+        const invalidFilter: QueryFilter<ItemType> = {
+            function: {
+                // @ts-expect-error - Field does not support number function
+                type: 'add',
+                operand: 10,
+            },
+            field: 'name',
+            operator: 'eq',
+            value: 10,
+        };
+        void invalidFilter;
+    });
+});
+
+describe('ArithmeticFunctionDefinition<number>', () => {
+    type ItemType = { price: number };
+
+    it('should allow basic arithmetic operations for numbers', () => {
+        const validAdd: ArithmeticFunctionDefinition<ItemType> = {
+            type: 'add',
+            operand: 10,
+        };
+        const validDiv: ArithmeticFunctionDefinition<ItemType> = {
+            type: 'div',
+            operand: 20,
+        };
+
+        const invalidSub: ArithmeticFunctionDefinition<ItemType> = {
+            type: 'sub',
+            //@ts-expect-error Operand should be number
+            operand: 'invalid',
+        };
+
+        assertType<ArithmeticFunctionDefinition<ItemType>>(validAdd);
+        assertType<ArithmeticFunctionDefinition<ItemType>>(validDiv);
+        void invalidSub;
+    });
+});
+
+describe('OData Arithmetic Operators', () => {
+    it('should allow arithmetic operations on numbers', () => {
+        type ItemType = { price: number };
+
+        const filter: QueryFilter<ItemType> = {
+            function: {
+                type: 'add',
+                operand: 10,
+            },
+            field: 'price',
+            operator: 'eq',
+            value: 110,
+        };
+        assertType<QueryFilter<ItemType>>(filter);
     });
 });

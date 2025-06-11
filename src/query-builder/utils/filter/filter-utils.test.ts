@@ -1,249 +1,410 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+import { toFilterQuery } from './filter-utils';
+import {
+    ArrayElement,
+    FilterOperators,
+    QueryFilter,
+} from 'src/query-builder/types/filter/query-filter.type';
 import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
-import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
 import { Guid } from 'src/query-builder/types/utils/util.types';
-import { describe, expect, it } from 'vitest';
-import { toFilterQuery, toQueryFilterQuery } from './filter-utils';
+import { describe, it, expect } from 'vitest';
 
-describe('toQueryFilterQuery', () => {
-    it('should not add quotes to guid filter if removeQuotes is true', () => {
-        const item = {
-            x: '271242cc-9290-4492-9f23-f340782cd26b' as Guid,
-        };
-        const expectedResult = 'x eq 271242cc-9290-4492-9f23-f340782cd26b';
+describe('toFilterQuery', () => {
+    type ItemType = {
+        isActive: boolean;
+        age: number;
+        name: string;
+        tags: string[];
+        createdAt: Date;
+        id: Guid;
+    };
 
-        const filter: QueryFilter<typeof item> = {
-            field: 'x',
-            operator: 'eq',
-            value: '271242cc-9290-4492-9f23-f340782cd26b' as Guid,
-            removeQuotes: true,
-        };
+    it('should handle a single basic filter', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            { field: 'isActive', operator: 'eq', value: true },
+        ];
 
-        const result = toQueryFilterQuery(filter);
+        const result = toFilterQuery(filters);
 
-        expect(result).toBe(expectedResult);
+        expect(result).toBe(`$filter=isActive eq true`);
     });
 
-    it('should not have quotes for boolean type', () => {
-        const item = {
-            x: true,
-        };
-        const filter: QueryFilter<typeof item> = {
-            field: 'x',
-            operator: 'eq',
-            value: true,
-        };
-        const expectedResult = 'x eq true';
+    it('should handle multiple basic filters combined with "and"', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            { field: 'isActive', operator: 'eq', value: true },
+            { field: 'age', operator: 'gt', value: 18 },
+        ];
 
-        const result = toQueryFilterQuery<typeof item>(filter);
+        const result = toFilterQuery(filters);
 
-        expect(result).toBe(expectedResult);
+        expect(result).toBe(`$filter=isActive eq true and age gt 18`);
     });
 
-    it('should not have quotes for number type', () => {
-        const item = {
-            x: 5,
-        };
-        const expectedResult = 'x eq 5';
-        const filter: QueryFilter<typeof item> = {
-            field: 'x',
-            operator: 'eq',
-            value: 5,
-        };
+    it('should handle a combined filter with "and" logic', () => {
+        const filters: CombinedFilter<ItemType>[] = [
+            {
+                logic: 'and',
+                filters: [
+                    { field: 'isActive', operator: 'eq', value: true },
+                    { field: 'age', operator: 'gt', value: 18 },
+                ],
+            },
+        ];
 
-        const result = toQueryFilterQuery(filter);
+        const result = toFilterQuery(filters);
 
-        expect(result).toBe(expectedResult);
+        expect(result).toBe(`$filter=(isActive eq true and age gt 18)`);
     });
 
-    it('should return empty string if not filter type', () => {
-        const result = toQueryFilterQuery({} as QueryFilter<unknown>);
+    it('should handle a combined filter with "or" logic', () => {
+        const filters: CombinedFilter<ItemType>[] = [
+            {
+                logic: 'or',
+                filters: [
+                    { field: 'isActive', operator: 'eq', value: false },
+                    { field: 'age', operator: 'le', value: 30 },
+                ],
+            },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(`$filter=(isActive eq false or age le 30)`);
+    });
+
+    it('should handle nested combined filters', () => {
+        const filters: CombinedFilter<ItemType>[] = [
+            {
+                logic: 'and',
+                filters: [
+                    { field: 'isActive', operator: 'eq', value: true },
+                    {
+                        logic: 'or',
+                        filters: [
+                            { field: 'age', operator: 'gt', value: 18 },
+                            { field: 'name', operator: 'eq', value: 'John' },
+                        ],
+                    },
+                ],
+            },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(
+            `$filter=(isActive eq true and (age gt 18 or name eq 'John'))`,
+        );
+    });
+
+    it('should handle lambda filters with primitive arrays', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            {
+                field: 'tags',
+                lambdaOperator: 'any',
+                expression: { field: '', operator: 'contains', value: 'test' },
+            },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(`$filter=tags/any(s: contains(s, 'test'))`);
+    });
+
+    it('should handle lambda filters with object arrays', () => {
+        type ComplexItemType = {
+            items: { name: string; quantity: number }[];
+        };
+
+        const filters: QueryFilter<ComplexItemType>[] = [
+            {
+                field: 'items',
+                lambdaOperator: 'any',
+                expression: {
+                    field: 'name',
+                    operator: 'eq',
+                    value: 'Apple',
+                } as QueryFilter<{ name: string; quantity: number }>,
+            },
+        ];
+
+        const result = toFilterQuery<ComplexItemType>(filters);
+
+        expect(result).toBe(`$filter=items/any(s: s/name eq 'Apple')`);
+    });
+
+    it('should handle ignoreCase for string filters', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            {
+                field: 'name',
+                operator: 'contains',
+                value: 'test',
+                ignoreCase: true,
+            },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(`$filter=contains(tolower(name), 'test')`);
+    });
+
+    it('should handle removeQuotes for Guid filters', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            {
+                field: 'id',
+                operator: 'eq',
+                value: 'f92477a9-5761-485a-b7cd-30561e2f888b' as Guid,
+                removeQuotes: true,
+            },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(
+            `$filter=id eq f92477a9-5761-485a-b7cd-30561e2f888b`,
+        );
+    });
+
+    it('should handle null values in filters', () => {
+        const filters: QueryFilter<ItemType>[] = [
+            { field: 'name', operator: 'eq', value: null },
+        ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(`$filter=name eq null`);
+    });
+
+    it('should handle a mix of basic, combined, and lambda filters', () => {
+        type TagElementType = ArrayElement<ItemType, 'tags'>;
+
+        const filters: Array<QueryFilter<ItemType> | CombinedFilter<ItemType>> =
+            [
+                { field: 'isActive', operator: 'eq', value: true },
+                {
+                    logic: 'or',
+                    filters: [
+                        { field: 'age', operator: 'gt', value: 18 },
+                        { field: 'name', operator: 'eq', value: 'John' },
+                    ],
+                },
+                {
+                    field: 'tags',
+                    lambdaOperator: 'any',
+                    expression: {
+                        field: '',
+                        operator: 'contains',
+                        value: 'test',
+                        ignoreCase: true,
+                    } as QueryFilter<TagElementType>,
+                },
+            ];
+
+        const result = toFilterQuery(filters);
+
+        expect(result).toBe(
+            `$filter=isActive eq true and (age gt 18 or name eq 'John') and tags/any(s: contains(tolower(s), 'test'))`,
+        );
+    });
+
+    it('should return an empty string when no filters are provided', () => {
+        const filters: QueryFilter<ItemType>[] = [];
+
+        const result = toFilterQuery(filters);
 
         expect(result).toBe('');
     });
 
-    it('should return filter string with any-lambda', () => {
-        const item = {
-            x: [{ y: '' }],
-        };
-        const expectedResult = "x/any(s: contains(tolower(s/y), ''))";
-
-        const filter: QueryFilter<typeof item> = {
-            field: 'x',
-            operator: 'contains',
-            value: '',
-            lambdaOperator: 'any',
-            ignoreCase: true,
-            innerField: 'y',
-        };
-
-        const result = toQueryFilterQuery<typeof item>(filter);
-
-        expect(result).toBe(expectedResult);
+    it('should throw an error for invalid filters', () => {
+        expect(() =>
+            toFilterQuery([
+                {
+                    operator: 'eq',
+                    value: true,
+                } as unknown as QueryFilter<ItemType>,
+            ]),
+        ).toThrowError('Invalid filter');
     });
+});
 
-    it('should return string filter with object in item that is optional', () => {
-        const item: { x: { y?: string; t: string } } = {
-            x: {
-                y: '',
-                t: '',
+describe('toFilterQuery - Extended Operator and Edge Cases', () => {
+    type ItemType = {
+        name: string;
+        age: number;
+        isActive: boolean;
+        createdAt: Date;
+        id: Guid;
+        value: number | null;
+        tags: string[];
+    };
+    const testGuid = 'f92477a9-5761-485a-b7cd-30561e2f888b' as Guid;
+    const testDate = new Date('2025-02-10T12:00:00Z');
+
+    describe('String Operators', () => {
+        it.each([
+            ['eq', 'test', `$filter=name eq 'test'`],
+            ['ne', 'test', `$filter=name ne 'test'`],
+        ])(
+            'should handle string operator "%s"',
+            (operator, value, expectedQuery) => {
+                const filters: QueryFilter<ItemType>[] = [
+                    {
+                        field: 'name',
+                        operator: operator as FilterOperators<string>,
+                        value,
+                    },
+                ];
+                expect(toFilterQuery(filters)).toBe(expectedQuery);
             },
-        };
-        const expectedResult = "contains(tolower(x/y), '')";
-
-        const filter: QueryFilter<typeof item> = {
-            field: 'x/y',
-            operator: 'contains',
-            value: '',
-            ignoreCase: true,
-        };
-
-        const result = toQueryFilterQuery<typeof item>(filter);
-
-        expect(result).toBe(expectedResult);
+        );
     });
 
-    it('should return filter string with all-lamda for string array', () => {
-        const item = {
-            x: [''],
-        };
-        const expectedResult = "x/any(s: contains(tolower(s), ''))";
-
-        const filter: QueryFilter<typeof item> = {
-            field: 'x',
-            operator: 'contains',
-            value: '',
-            lambdaOperator: 'any',
-            ignoreCase: true,
-        };
-
-        const result = toQueryFilterQuery<typeof item>(filter);
-
-        expect(result).toBe(expectedResult);
+    describe('Number Operators', () => {
+        it.each([
+            ['eq', 10, `$filter=age eq 10`],
+            ['ne', 10, `$filter=age ne 10`],
+            ['lt', 10, `$filter=age lt 10`],
+            ['le', 10, `$filter=age le 10`],
+            ['gt', 10, `$filter=age gt 10`],
+            ['ge', 10, `$filter=age ge 10`],
+        ])(
+            'should handle number operator "%s"',
+            (operator, value, expectedQuery) => {
+                const filters: QueryFilter<ItemType>[] = [
+                    {
+                        field: 'age',
+                        operator: operator as FilterOperators<number>,
+                        value,
+                    },
+                ];
+                expect(toFilterQuery(filters)).toBe(expectedQuery);
+            },
+        );
     });
 
-    it('should return combined filter string with logic or', () => {
-        const filter: CombinedFilter<{ x: boolean }> = {
-            logic: 'or',
-            filters: [
-                { field: 'x', operator: 'eq', value: true },
-                { field: 'x', operator: 'eq', value: false },
-            ],
-        };
-
-        const expectedResult = '$filter=(x eq true or x eq false)';
-
-        const result = toFilterQuery<{ x: boolean }>([filter]);
-
-        expect(result).toBe(expectedResult);
+    describe('Boolean Operators', () => {
+        it.each([
+            ['eq', true, `$filter=isActive eq true`],
+            ['ne', false, `$filter=isActive ne false`],
+        ])(
+            'should handle boolean operator "%s"',
+            (operator, value, expectedQuery) => {
+                const filters: QueryFilter<ItemType>[] = [
+                    {
+                        field: 'isActive',
+                        operator: operator as FilterOperators<boolean>,
+                        value,
+                    },
+                ];
+                expect(toFilterQuery(filters)).toBe(expectedQuery);
+            },
+        );
     });
 
-    it('should return combined filters string with logic or with filter array', () => {
-        const filter1: CombinedFilter<{ x: boolean }> = {
-            logic: 'or',
-            filters: [
-                { field: 'x', operator: 'eq', value: true },
-                { field: 'x', operator: 'eq', value: false },
-            ],
-        };
-
-        const filter2: CombinedFilter<{ x: boolean }> = {
-            logic: 'and',
-            filters: [
-                { field: 'x', operator: 'eq', value: true },
-                { field: 'x', operator: 'eq', value: false },
-            ],
-        };
-
-        const expectedResult =
-            '$filter=(x eq true or x eq false) and (x eq true and x eq false)';
-
-        const result = toFilterQuery<{ x: boolean }>([filter1, filter2]);
-
-        expect(result).toBe(expectedResult);
+    describe('Date Operators', () => {
+        it.each([
+            ['eq', testDate, `$filter=createdAt eq ${testDate.toISOString()}`],
+            ['ne', testDate, `$filter=createdAt ne ${testDate.toISOString()}`],
+            ['lt', testDate, `$filter=createdAt lt ${testDate.toISOString()}`],
+            ['le', testDate, `$filter=createdAt le ${testDate.toISOString()}`],
+            ['gt', testDate, `$filter=createdAt gt ${testDate.toISOString()}`],
+            ['ge', testDate, `$filter=createdAt ge ${testDate.toISOString()}`],
+        ])(
+            'should handle date operator "%s"',
+            (operator, value, expectedQuery) => {
+                const filters: QueryFilter<ItemType>[] = [
+                    {
+                        field: 'createdAt',
+                        operator: operator as FilterOperators<Date>,
+                        value,
+                    },
+                ];
+                expect(toFilterQuery(filters)).toBe(expectedQuery);
+            },
+        );
     });
 
-    it('should return combined filters string with date values', () => {
-        const date = new Date(Date.now());
-        const expectedResult = `$filter=(x eq ${date.toISOString()} or x eq ${date.toISOString()})`;
-
-        const filter: CombinedFilter<{ x: Date }> = {
-            logic: 'or',
-            filters: [
-                { field: 'x', operator: 'eq', value: date },
-                { field: 'x', operator: 'eq', value: date },
-            ],
-        };
-
-        const result = toFilterQuery<{ x: Date }>([filter]);
-
-        expect(result).toBe(expectedResult);
+    describe('Guid Operators', () => {
+        it.each([
+            ['eq', testGuid, `$filter=id eq '${testGuid}'`],
+            ['ne', testGuid, `$filter=id ne '${testGuid}'`],
+        ])(
+            'should handle guid operator "%s"',
+            (operator, value, expectedQuery) => {
+                const filters: QueryFilter<ItemType>[] = [
+                    {
+                        field: 'id',
+                        operator: operator as FilterOperators<Guid>,
+                        value,
+                    },
+                ];
+                expect(toFilterQuery(filters)).toBe(expectedQuery);
+            },
+        );
     });
 
-    it('should return combined filters with another combined filter in it', () => {
-        const expectedResult = `$filter=((x eq 'test' or x eq 'test1') and (y eq 'test2' or y eq 'test3') and z eq 'test4')`;
+    describe('Null Value Filters', () => {
+        it('should handle "ne null" filter', () => {
+            const filters: QueryFilter<ItemType>[] = [
+                { field: 'value', operator: 'ne', value: null },
+            ];
+            expect(toFilterQuery(filters)).toBe(`$filter=value ne null`);
+        });
+    });
 
-        interface dto {
-            x: string;
-            y: string;
-            z: string;
-        }
-
-        const filters: CombinedFilter<dto> = {
-            logic: 'and',
-            filters: [
+    describe('Combined Filters at Root Level', () => {
+        it('should combine multiple filters passed to toFilterQuery with "and"', () => {
+            const filters: Array<
+                QueryFilter<ItemType> | CombinedFilter<ItemType>
+            > = [
+                { field: 'isActive', operator: 'eq', value: true },
                 {
                     logic: 'or',
-                    filters: [
-                        { field: 'x', operator: 'eq', value: 'test' },
-                        { field: 'x', operator: 'eq', value: 'test1' },
-                    ],
+                    filters: [{ field: 'age', operator: 'gt', value: 20 }],
                 },
-                {
-                    logic: 'or',
-                    filters: [
-                        { field: 'y', operator: 'eq', value: 'test2' },
-                        { field: 'y', operator: 'eq', value: 'test3' },
-                    ],
-                },
-                { field: 'z', operator: 'eq', value: 'test4' },
-            ],
-        };
-
-        const result = toFilterQuery<dto>([filters]);
-
-        expect(result).toBe(expectedResult);
+                { field: 'name', operator: 'eq', value: 'John' },
+            ];
+            const expectedQuery = `$filter=isActive eq true and (age gt 20) and name eq 'John'`;
+            expect(toFilterQuery(filters)).toBe(expectedQuery);
+        });
     });
 
-    it('should return string wieh null value for combined filter', () => {
-        const expectedResult = '$filter=(x eq null)';
-
-        const filter: CombinedFilter<{ x: null }> = {
-            logic: 'or',
-            filters: [{ field: 'x', operator: 'eq', value: null }],
-        };
-
-        const result = toFilterQuery<{ x: null }>([filter]);
-
-        expect(result).toBe(expectedResult);
+    describe('Empty Filters Array in CombinedFilter', () => {
+        it('should handle CombinedFilter with empty filters array gracefully', () => {
+            const filters: CombinedFilter<ItemType>[] = [
+                { logic: 'and', filters: [] },
+            ];
+            expect(toFilterQuery(filters)).toBe(`$filter=`);
+        });
     });
 
-    it('should return string with null value for query filter', () => {
-        const expectedResult = 'x eq null';
+    describe('Invalid Filter Input', () => {
+        it('should throw an error for a filter with missing operator', () => {
+            expect(() =>
+                toFilterQuery([
+                    { field: 'name', value: 'test' } as QueryFilter<{
+                        name: string;
+                    }>,
+                ]),
+            ).toThrowError('Invalid filter');
+        });
 
-        const filter: QueryFilter<{ x: null }> = {
-            field: 'x',
-            operator: 'eq',
-            value: null,
-        };
+        it('should throw an error for a filter with missing field', () => {
+            expect(() =>
+                toFilterQuery([
+                    { operator: 'eq', value: 'test' } as QueryFilter<{
+                        name: string;
+                    }>,
+                ]),
+            ).toThrowError('Invalid filter');
+        });
 
-        const result = toQueryFilterQuery<{ x: null }>(filter);
-
-        expect(result).toBe(expectedResult);
-    });
-
-    it('should return empty string for toFilterQuery with empty array', () => {
-        const result = toFilterQuery<{ x: boolean }>([]);
-        expect(result).toEqual('');
+        it('should throw an error for a filter with missing value', () => {
+            expect(() =>
+                toFilterQuery([
+                    { field: 'name', operator: 'eq' } as QueryFilter<{
+                        name: string;
+                    }>,
+                ]),
+            ).toThrowError('Invalid filter');
+        });
     });
 });

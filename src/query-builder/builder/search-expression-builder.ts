@@ -8,57 +8,111 @@ export class SearchExpressionBuilder {
     private readonly parts: ReadonlyArray<SearchExpressionPart>;
 
     constructor(parts: SearchExpression = []) {
-        this.parts = parts;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        this.parts = Object.freeze(Array.isArray(parts) ? [...parts] : []);
     }
 
-    term(term: string): SearchExpressionBuilder {
-        if (!term.trim()) {
+    public term(value: string): SearchExpressionBuilder {
+        const trimmedValue = value.trim();
+        if (!trimmedValue) {
             throw new Error('Term cannot be empty or whitespace only.');
         }
         return new SearchExpressionBuilder([
             ...this.parts,
-            createSearchTerm(term),
+            createSearchTerm(trimmedValue),
         ]);
     }
 
-    phrase(phrase: string): SearchExpressionBuilder {
-        if (!phrase.trim()) {
+    public phrase(value: string): SearchExpressionBuilder {
+        const trimmedValue = value.trim();
+        if (!trimmedValue) {
             throw new Error('Phrase cannot be empty or whitespace only.');
         }
-        return new SearchExpressionBuilder([...this.parts, { phrase }]);
+        return new SearchExpressionBuilder([
+            ...this.parts,
+            { phrase: trimmedValue },
+        ]);
     }
 
-    and(): SearchExpressionBuilder {
+    public and(): SearchExpressionBuilder {
+        if (this.parts.length === 0) {
+            console.warn(
+                'Attempted to start an expression with AND. Operation skipped.',
+            );
+            return this;
+        }
+        const lastPart = this.parts[this.parts.length - 1];
+        if (
+            typeof lastPart === 'string' &&
+            (lastPart === 'AND' || lastPart === 'OR')
+        ) {
+            console.warn(
+                `Attempted to add AND after operator '${lastPart}'. Operation skipped.`,
+            );
+            return this;
+        }
         return new SearchExpressionBuilder([...this.parts, 'AND']);
     }
 
-    or(): SearchExpressionBuilder {
+    public or(): SearchExpressionBuilder {
+        if (this.parts.length === 0) {
+            console.warn(
+                'Attempted to start an expression with OR. Operation skipped.',
+            );
+            return this;
+        }
+        const lastPart = this.parts[this.parts.length - 1];
+        if (
+            typeof lastPart === 'string' &&
+            (lastPart === 'AND' || lastPart === 'OR')
+        ) {
+            console.warn(
+                `Attempted to add OR after operator '${lastPart}'. Operation skipped.`,
+            );
+            return this;
+        }
         return new SearchExpressionBuilder([...this.parts, 'OR']);
     }
 
-    not(expressionBuilder: SearchExpressionBuilder): SearchExpressionBuilder {
+    public not(
+        expressionBuilder: SearchExpressionBuilder,
+    ): SearchExpressionBuilder {
+        const subExpression = expressionBuilder.build();
+        if (subExpression.length === 0) {
+            throw new Error(
+                'NOT operator cannot be applied to an empty expression.',
+            );
+        }
         return new SearchExpressionBuilder([
             ...this.parts,
-            { expression: [`NOT`, ...expressionBuilder.build()] },
+
+            { expression: Object.freeze(['NOT' as const, ...subExpression]) },
         ]);
     }
 
-    group(builder: SearchExpressionBuilder): SearchExpressionBuilder {
+    public group(builder: SearchExpressionBuilder): SearchExpressionBuilder {
+        const subExpression = builder.build();
+        if (subExpression.length === 0) {
+            return this;
+        }
         return new SearchExpressionBuilder([
             ...this.parts,
-            { expression: builder.build() },
+            { expression: subExpression },
         ]);
     }
 
-    build(): SearchExpression {
+    public build(): SearchExpression {
         return this.parts;
     }
 
-    toString(): string {
-        return this.parts.map(this.stringifyPart.bind(this)).join(' ');
+    public toString(): string {
+        return this.parts
+            .map(part => this.stringifyPart(part))
+            .filter(Boolean)
+            .join(' ');
     }
 
-    equals(other: SearchExpressionBuilder): boolean {
+    public equals(other: SearchExpressionBuilder): boolean {
         return JSON.stringify(this.build()) === JSON.stringify(other.build());
     }
 
@@ -66,15 +120,56 @@ export class SearchExpressionBuilder {
         if (typeof part === 'string') {
             return part;
         }
-        if ('phrase' in part) {
+        if ('phrase' in part && part.phrase !== undefined) {
             return `"${part.phrase}"`;
         }
-        if ('expression' in part) {
-            const expression = part.expression
-                .map(this.stringifyPart.bind(this))
+
+        if ('expression' in part && Array.isArray(part.expression)) {
+            const groupExpressionParts = part.expression;
+            if (groupExpressionParts.length === 0) {
+                return '';
+            }
+
+            if (groupExpressionParts[0] === 'NOT') {
+                const exprToNegate = groupExpressionParts.slice(1);
+                if (exprToNegate.length === 0) {
+                    throw new Error(
+                        'Invalid NOT expression: NOT must be followed by a term or group.',
+                    );
+                }
+
+                const stringifiedSubExpression = exprToNegate
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                    .map(p => this.stringifyPart(p))
+                    .filter(Boolean)
+                    .join(' ');
+
+                if (stringifiedSubExpression === '') {
+                    throw new Error(
+                        'Invalid NOT expression: expression to negate is empty after stringification.',
+                    );
+                }
+
+                if (
+                    stringifiedSubExpression.startsWith('(') &&
+                    stringifiedSubExpression.endsWith(')')
+                ) {
+                    return `NOT ${stringifiedSubExpression}`;
+                } else {
+                    return `NOT (${stringifiedSubExpression})`;
+                }
+            }
+
+            const expressionString = groupExpressionParts
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                .map(p => this.stringifyPart(p))
+                .filter(Boolean)
                 .join(' ');
-            return `(${expression})`;
+
+            if (expressionString === '') return '';
+            return `(${expressionString})`;
         }
+
         throw new Error(
             `Unsupported SearchExpressionPart: ${JSON.stringify(part)}`,
         );
