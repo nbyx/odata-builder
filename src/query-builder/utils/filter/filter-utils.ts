@@ -1,5 +1,8 @@
 import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
-import { QueryFilter, LambdaFilter } from 'src/query-builder/types/filter/query-filter.type';
+import {
+    QueryFilter,
+    LambdaFilter,
+} from 'src/query-builder/types/filter/query-filter.type';
 import { isCombinedFilter } from './combined-filter-util';
 import { ODataFilterVisitor } from './filter-visitor';
 
@@ -33,20 +36,31 @@ export const toFilterQuery = <T>(
 };
 
 export function isBasicFilter<T>(obj: unknown): obj is QueryFilter<T> {
-    if (typeof obj !== 'object' || obj === null || !('field' in obj) || ('lambdaOperator' in obj)) {
+    if (
+        typeof obj !== 'object' ||
+        obj === null ||
+        !('field' in obj) ||
+        'lambdaOperator' in obj
+    ) {
         return false;
     }
-    
+
     // Standard filter with operator and value
     if ('operator' in obj && 'value' in obj) {
         return true;
     }
-    
+
     // Direct boolean function filter (contains, startswith, endswith without operator/value)
-    if ('function' in obj && obj.function && typeof obj.function === 'object' && obj.function !== null && 'type' in obj.function) {
+    if (
+        'function' in obj &&
+        obj.function &&
+        typeof obj.function === 'object' &&
+        obj.function !== null &&
+        'type' in obj.function
+    ) {
         return true;
     }
-    
+
     return false;
 }
 

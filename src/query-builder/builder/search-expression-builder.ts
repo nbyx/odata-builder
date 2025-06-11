@@ -1,7 +1,6 @@
 import {
     SearchExpression,
     SearchExpressionPart,
-    SearchGroup,
 } from '../types/search/search-expression.type';
 import { createSearchTerm } from '../utils/search/search.utils';
 
@@ -9,6 +8,7 @@ export class SearchExpressionBuilder {
     private readonly parts: ReadonlyArray<SearchExpressionPart>;
 
     constructor(parts: SearchExpression = []) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         this.parts = Object.freeze(Array.isArray(parts) ? [...parts] : []);
     }
 
@@ -139,6 +139,7 @@ export class SearchExpressionBuilder {
                 }
 
                 const stringifiedSubExpression = exprToNegate
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     .map(p => this.stringifyPart(p))
                     .filter(Boolean)
                     .join(' ');
@@ -160,6 +161,7 @@ export class SearchExpressionBuilder {
             }
 
             const expressionString = groupExpressionParts
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 .map(p => this.stringifyPart(p))
                 .filter(Boolean)
                 .join(' ');

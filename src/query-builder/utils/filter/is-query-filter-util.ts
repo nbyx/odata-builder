@@ -1,4 +1,4 @@
-import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
+import { QueryFilter } from '../../types/filter/query-filter.type';
 import { isCombinedFilter } from './combined-filter-util';
 import {
     getValueType,

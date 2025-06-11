@@ -15,7 +15,6 @@ import {
     getValueType,
     isValidOperator,
 } from './utils/filter/filter-helper.util';
-import { ArrayElement, ArrayFields } from './types/filter/query-filter.type';
 
 const countEntitiesQuery = '/$count';
 
@@ -103,23 +102,24 @@ export class OdataQueryBuilder<T> {
     public select(
         ...selectProps: ReadonlyArray<Extract<keyof Required<T>, string>>
     ): this {
-        if (selectProps === null || selectProps === undefined) {
-            if (
-                !Array.isArray(selectProps) &&
-                arguments.length === 1 &&
-                (arguments[0] === null || arguments[0] === undefined)
-            ) {
-                throw new Error(
-                    'Invalid select input: Argument cannot be null or undefined. Pass an array or individual strings.',
-                );
-            }
+        // Check if someone passed null or undefined explicitly (plain JS usage)
+        if (
+            selectProps.length === 1 &&
+            (selectProps[0] === null || selectProps[0] === undefined)
+        ) {
+            throw new Error(
+                'Invalid select input: Argument cannot be null or undefined. Pass an array or individual strings.',
+            );
         }
 
         if (
-            selectProps.length === 0 &&
-            arguments.length > 0 &&
-            (arguments[0] === null || arguments[0] === undefined)
+            selectProps.length === 0
         ) {
+            return this;
+        }
+
+        // Check if any parameter is null or undefined
+        if (selectProps.some(prop => prop === null || prop === undefined)) {
             throw new Error(
                 'Invalid select input: All properties must be non-empty strings.',
             );
@@ -145,21 +145,22 @@ export class OdataQueryBuilder<T> {
             CombinedFilter<Required<T>> | QueryFilter<Required<T>>
         >
     ): this {
-        if (filters === null || filters === undefined) {
-            if (
-                arguments.length === 1 &&
-                (arguments[0] === null || arguments[0] === undefined)
-            ) {
-                throw new Error(
-                    'Invalid filter input: Argument cannot be null or undefined. Pass an array or individual filter objects.',
-                );
-            }
-        }
+        // Check if someone passed null or undefined explicitly (plain JS usage)
         if (
-            filters.length === 0 &&
-            arguments.length > 0 &&
-            (arguments[0] === null || arguments[0] === undefined)
+            filters.length === 1 &&
+            (filters[0] === null || filters[0] === undefined)
         ) {
+            throw new Error(
+                'Invalid filter input: Argument cannot be null or undefined. Pass an array or individual filter objects.',
+            );
+        }
+        
+        if (filters.length === 0) {
+            return this;
+        }
+
+        // Check if any filter is null or undefined
+        if (filters.some(filter => filter === null || filter === undefined)) {
             throw new Error(
                 'Invalid filter input: Filter cannot be null or undefined.',
             );
@@ -183,7 +184,6 @@ export class OdataQueryBuilder<T> {
                         );
                     }
                 }
-            } else if (this.isLambdaFilterInternal(filter)) {
             } else if (!isCombinedFilter(filter)) {
                 throw new Error(
                     `Invalid filter input structure: ${JSON.stringify(filter)}`,
@@ -197,21 +197,22 @@ export class OdataQueryBuilder<T> {
     public expand(
         ...expandFields: ReadonlyArray<ExpandFields<Required<T>>>
     ): this {
-        if (expandFields === null || expandFields === undefined) {
-            if (
-                arguments.length === 1 &&
-                (arguments[0] === null || arguments[0] === undefined)
-            ) {
-                throw new Error(
-                    'Invalid expand input: Argument cannot be null or undefined. Pass an array or individual strings.',
-                );
-            }
-        }
+        // Check if someone passed null or undefined explicitly (plain JS usage)
         if (
-            expandFields.length === 0 &&
-            arguments.length > 0 &&
-            (arguments[0] === null || arguments[0] === undefined)
+            expandFields.length === 1 &&
+            (expandFields[0] === null || expandFields[0] === undefined)
         ) {
+            throw new Error(
+                'Invalid expand input: Argument cannot be null or undefined. Pass an array or individual strings.',
+            );
+        }
+        
+        if (expandFields.length === 0) {
+            return this;
+        }
+
+        // Check if any field is null or undefined
+        if (expandFields.some(field => field === null || field === undefined)) {
             throw new Error(
                 'Invalid expand input: All fields must be non-empty strings.',
             );
@@ -257,14 +258,16 @@ export class OdataQueryBuilder<T> {
             OrderByDescriptor<Required<T>> | null | undefined
         >
     ): this {
-        if (!orderByInput || orderByInput.length === 0) {
-            if (
-                arguments.length === 1 &&
-                (arguments[0] === null || arguments[0] === undefined)
-            ) {
-                return this;
-            }
-            if (orderByInput.length === 0) return this;
+        if (orderByInput.length === 0) {
+            return this;
+        }
+        
+        // Handle single null/undefined parameter (plain JS usage)
+        if (
+            orderByInput.length === 1 &&
+            (orderByInput[0] === null || orderByInput[0] === undefined)
+        ) {
+            return this;
         }
 
         const validOrderByDescriptors = orderByInput.filter(
@@ -346,12 +349,12 @@ export class OdataQueryBuilder<T> {
         const queryStringParts: string[] = [];
 
         for (const key of componentOrder) {
-            const currentKey = key as keyof QueryComponents<T>;
+            const currentKey = key;
             const componentValue = this.queryComponents[currentKey];
 
             if (componentValue !== undefined && componentValue !== null) {
                 const specificQueryFn = queryGeneratorMap[currentKey] as (
-                    comp: any,
+                    comp: unknown,
                 ) => string;
                 const queryPart = specificQueryFn(
                     componentValue as NonNullable<typeof componentValue>,
@@ -362,7 +365,7 @@ export class OdataQueryBuilder<T> {
             }
         }
 
-        let queryString = queryStringParts.join('&');
+        const queryString = queryStringParts.join('&');
 
         if (
             this.queryComponents.count === countEntitiesQuery &&
@@ -404,30 +407,4 @@ export class OdataQueryBuilder<T> {
         return this;
     }
 
-    private isLambdaFilterInternal<LambdaInputType>(
-        filter: unknown,
-    ): filter is QueryFilter<LambdaInputType> & {
-        lambdaOperator: 'any' | 'all';
-        expression:
-            | QueryFilter<
-                  ArrayElement<LambdaInputType, ArrayFields<LambdaInputType>>
-              >
-            | CombinedFilter<
-                  ArrayElement<LambdaInputType, ArrayFields<LambdaInputType>>
-              >;
-    } {
-        if (typeof filter !== 'object' || filter === null) return false;
-        const f = filter as Record<string, unknown>;
-        return (
-            'lambdaOperator' in f &&
-            (f['lambdaOperator'] === 'any' || f['lambdaOperator'] === 'all') &&
-            'expression' in f &&
-            f['expression'] !== null &&
-            typeof f['expression'] === 'object' &&
-            'field' in f &&
-            (isBasicFilter(f['expression']) ||
-                isCombinedFilter(f['expression']) ||
-                this.isLambdaFilterInternal(f['expression']))
-        );
-    }
 }

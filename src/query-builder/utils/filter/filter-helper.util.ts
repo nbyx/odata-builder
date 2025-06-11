@@ -1,5 +1,5 @@
 import { Guid } from 'src/query-builder/types/utils/util.types';
-import { StringFunctionalOperators } from 'src/query-builder/types/filter/query-filter.type';
+import { StringAsFunctionOperators } from 'src/query-builder/types/filter/query-filter.type';
 
 export const operatorTypeMap: Record<string, ReadonlyArray<string>> = {
     string: Object.freeze([
@@ -25,8 +25,8 @@ export const transformTypeMap: Record<string, ReadonlyArray<string>> = {
     Guid: Object.freeze(['tolower']),
 };
 
-export const odataStringFunctions: ReadonlySet<StringFunctionalOperators> =
-    new Set<StringFunctionalOperators>([
+export const odataStringFunctions: ReadonlySet<StringAsFunctionOperators> =
+    new Set<StringAsFunctionOperators>([
         'contains',
         'startswith',
         'endswith',
