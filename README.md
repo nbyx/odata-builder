@@ -5,6 +5,10 @@ Generate Typesafe OData v4 Queries with Ease. odata-builder ensures your queries
 [![build and test](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml)
 [![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
 
+## ⚠️ Breaking Changes in v0.8.0
+
+**Important**: This version introduces breaking changes to lambda expressions and function syntax. Please review the [Migration Guide](#migration-guide) below.
+
 ## Features
 
 - ✨ **Complete TypeScript Support** with perfect autocomplete
@@ -671,6 +675,168 @@ const complexQuery = new OdataQueryBuilder<Product>()
 - **Operator Restrictions**: Only valid operators for each field type
 - **Deep Object Navigation**: Full autocomplete for nested properties
 - **Function Parameter Validation**: Ensures correct function usage
+
+## Migration Guide
+
+### Upgrading from v0.7.x to v0.8.0
+
+Version 0.8.0 introduces breaking changes to improve type safety and add OData function support. Here's how to update your code:
+
+#### 1. Lambda Expression Changes
+
+**Before (v0.7.x):**
+```typescript
+// Old syntax with innerProperty
+const query = new OdataQueryBuilder<MyType>()
+    .filter({
+        field: 'items',
+        operator: 'contains',
+        value: 'test',
+        lambdaOperator: 'any',
+        innerProperty: 'name',
+        ignoreCase: true,
+    })
+    .toQuery();
+```
+
+**After (v0.8.0):**
+```typescript
+// New syntax with expression object
+const query = new OdataQueryBuilder<MyType>()
+    .filter({
+        field: 'items',
+        lambdaOperator: 'any',
+        expression: {
+            field: 'name',
+            operator: 'contains',
+            value: 'test',
+            ignoreCase: true
+        }
+    })
+    .toQuery();
+```
+
+#### 2. Simple Array Lambda Expressions
+
+**Before (v0.7.x):**
+```typescript
+// Old syntax for simple arrays
+const query = new OdataQueryBuilder<MyType>()
+    .filter({
+        field: 'tags',
+        operator: 'contains',
+        value: 'important',
+        lambdaOperator: 'any',
+        ignoreCase: true,
+    })
+    .toQuery();
+```
+
+**After (v0.8.0):**
+```typescript
+// New syntax - use empty string for field
+const query = new OdataQueryBuilder<MyType>()
+    .filter({
+        field: 'tags',
+        lambdaOperator: 'any',
+        expression: {
+            field: '',  // Empty string for array elements
+            operator: 'contains',
+            value: 'important',
+            ignoreCase: true
+        }
+    })
+    .toQuery();
+```
+
+#### 3. New OData Function Support
+
+Version 0.8.0 adds comprehensive OData function support:
+
+```typescript
+// String functions
+const lengthFilter = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'length' },
+        operator: 'gt',
+        value: 10
+    })
+    .toQuery();
+
+// Math functions  
+const roundedPrice = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'price',
+        function: { type: 'round' },
+        operator: 'eq',
+        value: 100
+    })
+    .toQuery();
+
+// Date functions
+const yearFilter = new OdataQueryBuilder<Order>()
+    .filter({
+        field: 'createdAt',
+        function: { type: 'year' },
+        operator: 'eq',
+        value: 2024
+    })
+    .toQuery();
+```
+
+#### 4. Property Transformations (New Feature)
+
+Transform field values before comparison:
+
+```typescript
+// String transformations
+const query = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        operator: 'eq',
+        value: 'iphone',
+        transform: ['tolower', 'trim']  // Chain transformations
+    })
+    .toQuery();
+// Result: ?$filter=tolower(trim(name)) eq 'iphone'
+```
+
+#### 5. Nested Lambda Expressions (New Feature)
+
+```typescript
+// Deep nesting support
+const nestedQuery = new OdataQueryBuilder<Category>()
+    .filter({
+        field: 'products',
+        lambdaOperator: 'any',
+        expression: {
+            field: 'variants',
+            lambdaOperator: 'any', 
+            expression: {
+                field: 'color',
+                operator: 'eq',
+                value: 'red'
+            }
+        }
+    })
+    .toQuery();
+// Result: ?$filter=products/any(s: s/variants/any(t: t/color eq 'red'))
+```
+
+#### Quick Migration Checklist
+
+1. ✅ **Update lambda filters**: Replace `innerProperty` with `expression: { field: '...' }`
+2. ✅ **Fix array lambdas**: Use `field: ''` for simple array element filtering  
+3. ✅ **Test your queries**: All existing functionality should work with the new syntax
+4. ✅ **Explore new features**: Consider using OData functions and property transformations
+
+#### Need Help?
+
+If you encounter issues during migration:
+- Check the extensive examples in this README
+- Review the TypeScript autocomplete suggestions
+- [Open an issue](https://github.com/nbyx/odata-builder/issues) if you need assistance
 
 ## Contributing
 
