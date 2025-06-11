@@ -63,13 +63,17 @@ jobs:
           
           # Test NPM registry connectivity
           echo "🔍 Testing NPM registry connectivity..."
-          if ! npm whoami --registry https://registry.npmjs.org/ > /dev/null 2>&1; then
+          
+          # Configure NPM authentication
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          
+          if ! npm whoami 2>/dev/null; then
             echo "❌ Cannot authenticate with NPM registry"
             echo "Please verify NPM_TOKEN has sufficient permissions"
             exit 1
           fi
           
-          NPM_USER=$(npm whoami --registry https://registry.npmjs.org/)
+          NPM_USER=$(npm whoami 2>/dev/null)
           echo "✅ Authenticated as NPM user: $NPM_USER"
           echo "✅ All secrets verified"
         env:
