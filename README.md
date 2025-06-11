@@ -1,365 +1,681 @@
 # odata-builder
 
-Generate Typesafe OData Queries with Ease. odata-builder ensures your queries are correct as you write them, eliminating worries about incorrect query formats.
+Generate Typesafe OData v4 Queries with Ease. odata-builder ensures your queries are correct as you write them, eliminating worries about incorrect query formats.
 
 [![build and test](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml)
 [![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
+
+## Features
+
+- ✨ **Complete TypeScript Support** with perfect autocomplete
+- 🔒 **Type-Safe Queries** - catch errors at compile time
+- 📊 **Comprehensive OData v4 Support** including functions, lambda expressions, and advanced filtering
+- 🚀 **Performance Optimized** with minimal runtime overhead
+- 🎯 **Developer Experience** focused with extensive IntelliSense support
 
 ## Install
 
 Install odata-builder using your preferred package manager:
 
-```javascript
+```bash
 npm install --save odata-builder
 ```
 
 or
 
-```javascript
+```bash
 yarn add odata-builder
 ```
 
-## Usage
+## Quick Start
 
-Effortlessly create queries with typesafe objects:
+```typescript
+import { OdataQueryBuilder } from 'odata-builder';
 
-```javascript
-const item = {
-    someProperty: 'someValue',
+type Product = {
+    id: number;
+    name: string;
+    price: number;
+    category: string;
+    isActive: boolean;
 }
 
-const queryBuilder = new OdataQueryBuilder<typeof item>()
-    .count()
-    .filter({field: 'someProperty', operator: 'eq', value: 'test'})
-    .skip(10)
-    .top(100)
-    .select('someOtherProperty1', 'someOtherProperty2')
+const query = new OdataQueryBuilder<Product>()
+    .filter({ field: 'isActive', operator: 'eq', value: true })
+    .filter({ field: 'price', operator: 'gt', value: 100 })
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .top(10)
     .toQuery();
-//  ^ ?$count=true&$filter=someProperty eq 'test'&$skip=10&$top=100&$select=someOtherProperty1, someOtherProperty2
+// Result: ?$filter=isActive eq true and price gt 100&$orderby=name asc&$top=10
+```
+
+## Core Query Operations
+
+### Basic Filtering
+
+```typescript
+const queryBuilder = new OdataQueryBuilder<Product>()
+    .filter({ field: 'name', operator: 'eq', value: 'iPhone' })
+    .filter({ field: 'price', operator: 'gt', value: 500 })
+    .toQuery();
+// Result: ?$filter=name eq 'iPhone' and price gt 500
 ```
 
 ### Count and Data Retrieval
 
-For counting and data retrieval:
+```typescript
+// Count with filters
+const countQuery = new OdataQueryBuilder<Product>()
+    .count()
+    .filter({ field: 'isActive', operator: 'eq', value: true })
+    .toQuery();
+// Result: ?$count=true&$filter=isActive eq true
 
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+// Count only (no data)
+const countOnlyQuery = new OdataQueryBuilder<Product>()
     .count(true)
-    .filter(...) // only for demonstrating the count
+    .filter({ field: 'category', operator: 'eq', value: 'Electronics' })
     .toQuery();
-//  ^ /$count?$filter=....
+// Result: /$count?$filter=category eq 'Electronics'
 ```
 
-### Querying with GUID:
+### Selection and Ordering
 
-Decide on the inclusion of single quotes in GUID queries:
+```typescript
+const query = new OdataQueryBuilder<Product>()
+    .select('name', 'price', 'category')
+    .orderBy({ field: 'price', orderDirection: 'desc' })
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .top(20)
+    .skip(40)
+    .toQuery();
+// Result: ?$select=name,price,category&$orderby=price desc,name asc&$top=20&$skip=40
+```
 
-```javascript
-import { Guid, OdataQueryBuilder } from 'odata-builder';
+## Advanced Filtering
 
-// You could type your id directly as guid
-type MyAwesomeDto = {
+### GUID Support
+
+```typescript
+import { Guid } from 'odata-builder';
+
+type User = {
     id: Guid;
-    ...
+    name: string;
 }
 
-const filter = {
-    field: 'id',
-    operator: 'eq'
-    value: 'f92477a9-5761-485a-b7cd-30561e2f888b', // must be guid
-    removeQuotes: true, // if not defined the guid will be added to the query with single quotes
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter(filter)
-    .toQuery();
-//  ^ ?$filter=id eq some-guid
-
-```
-
-### Lambda Expressions for Array Filtering:
-
-Utilize lambda expressions for filtering array fields:
-
-```javascript
-type MyAwesomeDto = {
-    ...
-    someProperty: string[]
-    ...
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+const query = new OdataQueryBuilder<User>()
     .filter({
-        field: 'someProperty',
-        operator: 'contains',
-        value: 'test',
-        lambdaOperator: 'any',
-        ignoreCase: true,
+        field: 'id',
+        operator: 'eq',
+        value: 'f92477a9-5761-485a-b7cd-30561e2f888b',
+        removeQuotes: true  // Optional: removes quotes around GUID
     })
     .toQuery();
-//  ^ ?$filter=someProperty/any(s: contains(tolower(s), 'test'));
+// Result: ?$filter=id eq f92477a9-5761-485a-b7cd-30561e2f888b
 ```
 
-### Filtering Objects in Arrays:
+### Case-Insensitive Filtering
 
-Filter within arrays of objects:
-
-```javascript
-type MyAwesomeDto = {
-    ...
-    someProperty: { someInnerProperty: string }[]
-    ...
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+```typescript
+const query = new OdataQueryBuilder<Product>()
     .filter({
-        field: 'someProperty',
+        field: 'name',
         operator: 'contains',
-        value: 'test',
-        lambdaOperator: 'any',
-        innerProperty: 'someInnerProperty', // <-- you will also get autocomplete for this property
-        ignoreCase: true,
+        value: 'apple',
+        ignoreCase: true
     })
     .toQuery();
-//  ^ ?$filter=someProperty/any(s: contains(tolower(s/someInnerProperty), 'test'));
-
+// Result: ?$filter=contains(tolower(name), 'apple')
 ```
 
-### Combined Filters:
+### Combined Filters
 
-Combine multiple filters:
-
-```javascript
- const queryBuilder = new ODataQueryBuilder<MyAwesomeDto>
+```typescript
+const query = new OdataQueryBuilder<Product>()
     .filter({
-        logic: 'or',
+        logic: 'and',
         filters: [
-            { field: 'x', operator: 'eq', value: 'test' },
-            { field: 'y', operator: 'eq', value: 5 },
-        ],
+            { field: 'isActive', operator: 'eq', value: true },
+            {
+                logic: 'or',
+                filters: [
+                    { field: 'category', operator: 'eq', value: 'Electronics' },
+                    { field: 'category', operator: 'eq', value: 'Books' }
+                ]
+            }
+        ]
     })
     .toQuery();
-//  ^ ?$filter=(x eq test or y eq 5)
+// Result: ?$filter=(isActive eq true and (category eq 'Electronics' or category eq 'Books'))
 ```
 
-### Full-Text Search Queries:
+## OData Functions
 
-Full-text search allows you to query textual data efficiently. Use the `search` method for global text searches across multiple fields or for advanced logical search expressions.
+### String Functions
 
-#### Simple Search:
-
-You can use a raw string for basic search functionality:
-
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .search('simple search term')
+```typescript
+// String length
+const query = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'length' },
+        operator: 'gt',
+        value: 10
+    })
     .toQuery();
-//  ^ ?$search=simple%20search%20term
+// Result: ?$filter=length(name) gt 10
+
+// String concatenation
+const concatQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: {
+            type: 'concat',
+            values: [' - ', { fieldReference: 'category' }]
+        },
+        operator: 'eq',
+        value: 'iPhone - Electronics'
+    })
+    .toQuery();
+// Result: ?$filter=concat(name, ' - ', category) eq 'iPhone - Electronics'
+
+// Substring extraction
+const substringQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'substring', start: 0, length: 5 },
+        operator: 'eq',
+        value: 'iPhone'
+    })
+    .toQuery();
+// Result: ?$filter=substring(name, 0, 5) eq 'iPhone'
+
+// String search position
+const indexQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'indexof', value: 'Pro' },
+        operator: 'gt',
+        value: -1
+    })
+    .toQuery();
+// Result: ?$filter=indexof(name, 'Pro') gt -1
 ```
 
-#### Advanced Search with SearchExpressionBuilder:
+### Mathematical Functions
 
-For more complex search requirements, use the SearchExpressionBuilder to construct logical expressions.
+```typescript
+// Basic arithmetic
+const query = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'price',
+        function: { type: 'add', operand: 100 },
+        operator: 'gt',
+        value: 1000
+    })
+    .toQuery();
+// Result: ?$filter=price add 100 gt 1000
 
-```javascript
+// Field references in arithmetic
+const fieldRefQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'price',
+        function: { type: 'mul', operand: { fieldReference: 'taxRate' } },
+        operator: 'lt',
+        value: 500
+    })
+    .toQuery();
+// Result: ?$filter=price mul taxRate lt 500
+
+// Rounding functions
+const roundQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'price',
+        function: { type: 'round' },
+        operator: 'eq',
+        value: 100
+    })
+    .toQuery();
+// Result: ?$filter=round(price) eq 100
+```
+
+### Date/Time Functions
+
+```typescript
+type Order = {
+    id: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+// Extract date parts
+const yearQuery = new OdataQueryBuilder<Order>()
+    .filter({
+        field: 'createdAt',
+        function: { type: 'year' },
+        operator: 'eq',
+        value: 2024
+    })
+    .toQuery();
+// Result: ?$filter=year(createdAt) eq 2024
+
+// Current time comparison
+const nowQuery = new OdataQueryBuilder<Order>()
+    .filter({
+        field: 'updatedAt',
+        function: { type: 'now' },
+        operator: 'gt',
+        value: new Date('2024-01-01')
+    })
+    .toQuery();
+// Result: ?$filter=now() gt 2024-01-01T00:00:00.000Z
+
+// Date extraction
+const dateQuery = new OdataQueryBuilder<Order>()
+    .filter({
+        field: 'createdAt',
+        function: { type: 'date', field: { fieldReference: 'createdAt' } },
+        operator: 'eq',
+        value: '2024-01-15',
+        removeQuotes: true
+    })
+    .toQuery();
+// Result: ?$filter=date(createdAt) eq 2024-01-15
+```
+
+### Direct Boolean Functions
+
+```typescript
+// Direct boolean function calls (no operator needed)
+const containsQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'contains', value: 'Pro' }
+    })
+    .toQuery();
+// Result: ?$filter=contains(name, 'Pro')
+
+// Boolean function with explicit comparison
+const notContainsQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        function: { type: 'contains', value: 'Basic' },
+        operator: 'eq',
+        value: false
+    })
+    .toQuery();
+// Result: ?$filter=contains(name, 'Basic') eq false
+```
+
+## Property Transformations
+
+Transform field values before comparison:
+
+```typescript
+// String transformations
+const query = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'name',
+        operator: 'eq',
+        value: 'iphone',
+        transform: ['tolower', 'trim']
+    })
+    .toQuery();
+// Result: ?$filter=tolower(trim(name)) eq 'iphone'
+
+// Numeric transformations
+const roundQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'price',
+        operator: 'eq',
+        value: 100,
+        transform: ['round']
+    })
+    .toQuery();
+// Result: ?$filter=round(price) eq 100
+
+// Date transformations
+type Event = { startDate: Date; }
+const dateQuery = new OdataQueryBuilder<Event>()
+    .filter({
+        field: 'startDate',
+        operator: 'eq',
+        value: 2024,
+        transform: ['year']
+    })
+    .toQuery();
+// Result: ?$filter=year(startDate) eq 2024
+```
+
+## Array and Lambda Expressions
+
+### Filtering String Arrays
+
+```typescript
+type Article = {
+    title: string;
+    tags: string[];
+}
+
+const query = new OdataQueryBuilder<Article>()
+    .filter({
+        field: 'tags',
+        lambdaOperator: 'any',
+        expression: {
+            field: '',
+            operator: 'eq',
+            value: 'technology'
+        }
+    })
+    .toQuery();
+// Result: ?$filter=tags/any(s: s eq 'technology')
+```
+
+### Filtering Object Arrays
+
+```typescript
+type Product = {
+    name: string;
+    reviews: Array<{
+        rating: number;
+        comment: string;
+        verified: boolean;
+    }>;
+}
+
+const query = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'reviews',
+        lambdaOperator: 'any',
+        expression: {
+            field: 'rating',
+            operator: 'gt',
+            value: 4
+        }
+    })
+    .toQuery();
+// Result: ?$filter=reviews/any(s: s/rating gt 4)
+```
+
+### Functions in Lambda Expressions
+
+```typescript
+// String functions in arrays
+const lengthQuery = new OdataQueryBuilder<Article>()
+    .filter({
+        field: 'tags',
+        lambdaOperator: 'any',
+        expression: {
+            field: '',
+            function: { type: 'length' },
+            operator: 'gt',
+            value: 5
+        }
+    })
+    .toQuery();
+// Result: ?$filter=tags/any(s: length(s) gt 5)
+
+// Complex nested expressions
+const complexQuery = new OdataQueryBuilder<Product>()
+    .filter({
+        field: 'reviews',
+        lambdaOperator: 'all',
+        expression: {
+            field: 'comment',
+            function: { type: 'tolower' },
+            operator: 'contains',
+            value: 'excellent'
+        }
+    })
+    .toQuery();
+// Result: ?$filter=reviews/all(s: contains(tolower(s/comment), 'excellent'))
+```
+
+### Nested Lambda Expressions
+
+```typescript
+type Category = {
+    name: string;
+    products: Array<{
+        name: string;
+        variants: Array<{
+            color: string;
+            size: string;
+        }>;
+    }>;
+}
+
+const nestedQuery = new OdataQueryBuilder<Category>()
+    .filter({
+        field: 'products',
+        lambdaOperator: 'any',
+        expression: {
+            field: 'variants',
+            lambdaOperator: 'any',
+            expression: {
+                field: 'color',
+                operator: 'eq',
+                value: 'red'
+            }
+        }
+    })
+    .toQuery();
+// Result: ?$filter=products/any(s: s/variants/any(t: t/color eq 'red'))
+```
+
+## Full-Text Search
+
+### Simple Search
+
+```typescript
+const query = new OdataQueryBuilder<Product>()
+    .search('laptop gaming')
+    .toQuery();
+// Result: ?$search=laptop%20gaming
+```
+
+### Advanced Search with SearchExpressionBuilder
+
+```typescript
 import { SearchExpressionBuilder } from 'odata-builder';
 
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+const searchQuery = new OdataQueryBuilder<Product>()
     .search(
         new SearchExpressionBuilder()
-            .term('red')
+            .term('laptop')
             .and()
-            .term('blue')
+            .phrase('high performance')
             .or()
             .group(
                 new SearchExpressionBuilder()
-                    .term('green')
-                    .not(new SearchExpressionBuilder().term('yellow')),
-            ),
+                    .term('gaming')
+                    .and()
+                    .not(new SearchExpressionBuilder().term('budget'))
+            )
     )
     .toQuery();
-//  ^ ?$search=(red%20AND%20blue%20OR%20(green%20AND%20(NOT%20yellow)))
-```
-
-#### Combining Search with Other Parameters:
-
-`search` can be combined seamlessly with other query parameters:
-
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter({ field: 'isActive', operator: 'eq', value: true })
-    .orderBy({ field: 'name', orderDirection: 'asc' })
-    .top(20)
-    .search(
-        new SearchExpressionBuilder()
-            .term('keyword')
-            .and()
-            .phrase('exact phrase'),
-    )
-    .toQuery();
-//  ^ ?$filter=isActive eq true&$orderby=name asc&$top=20&$search=keyword%20AND%20%22exact%20phrase%22
+// Result: ?$search=laptop%20AND%20%22high%20performance%22%20OR%20(gaming%20AND%20(NOT%20budget))
 ```
 
 ### SearchExpressionBuilder Methods
 
-The `SearchExpressionBuilder` provides methods to build logical search expressions. Here's an overview of its core methods:
-
-#### **1. `term`**
-Adds a single search term to the expression.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().term('keyword');
-    // ^ keyword
-    ```
-
-- **Behavior**: A single word without quotes.
-
-#### **2. `phrase`**
-Adds a phrase (multiple words) as a single search entity, enclosed in quotes.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().phrase('exact match');
-    // ^ "exact match"
-    ```
-
-- **Behavior**: Ensures the entire phrase is treated as a single unit.
-
-#### **3. `and` / `or`**
-Adds logical operators to combine multiple terms or phrases.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().term('red').and().term('blue');
-    // ^ red AND blue
-    ```
-
-#### **4. `not`**
-Negates a search expression.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().not(new SearchExpressionBuilder().term('red'));
-    // ^ NOT red
-    ```
-
-#### **5. `group`**
-Groups a search expression to control logical precedence.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().group(
-        new SearchExpressionBuilder().term('red').or().term('blue')
+```typescript
+const builder = new SearchExpressionBuilder()
+    .term('laptop')           // Single term: laptop
+    .phrase('exact match')    // Quoted phrase: "exact match"  
+    .and()                    // Logical AND
+    .or()                     // Logical OR
+    .not(                     // Logical NOT
+        new SearchExpressionBuilder().term('budget')
+    )
+    .group(                   // Grouping with parentheses
+        new SearchExpressionBuilder().term('gaming')
     );
-    // ^ (red OR blue)
-    ```
+```
 
----
+## Property Expansion
 
-### `build` vs `toString`
+### Basic Expansion
 
-#### **`build`**
-- Returns the raw structure of the search expression as an array of parts.
-- Useful for debugging or extending the search logic programmatically.
+```typescript
+type Order = {
+    id: number;
+    customer: {
+        name: string;
+        email: string;
+    };
+}
 
-- **Example**:
-    ```javascript
-    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
-    console.log(builder.build());
-    // ^ [ 'red', 'AND', 'blue' ]
-    ```
+const query = new OdataQueryBuilder<Order>()
+    .expand('customer')
+    .toQuery();
+// Result: ?$expand=customer
+```
 
-#### **`toString`**
-- Converts the search expression into a properly formatted query string.
-- Used when appending the search to an OData query.
+### Nested Property Expansion
 
-- **Example**:
-    ```javascript
-    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
-    console.log(builder.toString());
-    // ^ red AND blue
-    ```
+```typescript
+type Order = {
+    id: number;
+    customer: {
+        profile: {
+            address: {
+                city: string;
+                country: string;
+            };
+        };
+    };
+}
 
-#### Why Use SearchExpressionBuilder?
+const query = new OdataQueryBuilder<Order>()
+    .expand('customer/profile/address')  // Full autocomplete support
+    .toQuery();
+// Result: ?$expand=customer/profile/address
+```
 
-The SearchExpressionBuilder provides:
+## Type-Safe Function Parameters
 
-- **Logical Operators**: Combine search terms using `AND`, `OR`, and `NOT`.
-- **Grouping**: Use nested expressions for advanced search logic.
-- **Type Safety**: Get compile-time validation for all search expressions.
+Create reusable, type-safe filter functions:
 
-### Function Encapsulation:
+```typescript
+import { FilterFields, FilterOperators } from 'odata-builder';
 
-Encapsulate query creation:
-
-```javascript
-const item = {
-    x: 4,
-    y: 'test',
-    z: new Date(Date.now()),
+const createStringFilter = <T>(
+    field: FilterFields<T, string>,
+    operator: FilterOperators<string>,
+    value: string
+) => {
+    return new OdataQueryBuilder<T>()
+        .filter({ field, operator, value })
+        .toQuery();
 };
 
-const testFn = (
-    field: FilterFields<typeof item, string>, // you can use that type to get only the fields with type string
-    operator: FilterOperators<string>, // only allows filter operators for the given type
-    value: string, // you should use the type that you have defined in the FilterFields type
-): string => {
-    const queryBuilder = new OdataQueryBuilder<typeof item>();
-
-    queryBuilder.filter({ field, operator, value });
-
-    return queryBuilder.toQuery();
-};
-
-const result = testFn('y', 'eq', 'test');
-//  ^ ?$filter=y eq 'test'
+// Usage with full type safety and autocomplete
+const result = createStringFilter(product, 'contains', 'iPhone');
 ```
 
-### Property Expansion:
+## Complete Example: E-commerce Product Search
 
-Expand properties in queries:
-
-```javascript
-const item = {
-    x: { someProperty: '' },
+```typescript
+type Product = {
+    id: number;
+    name: string;
+    price: number;
+    category: string;
+    isActive: boolean;
+    tags: string[];
+    reviews: Array<{
+        rating: number;
+        comment: string;
+        verified: boolean;
+    }>;
+    createdAt: Date;
 }
-const queryBuilder = new OdataQueryBuilder<typeof item>();
-    .expand('x')
+
+const complexQuery = new OdataQueryBuilder<Product>()
+    // Text search
+    .search(
+        new SearchExpressionBuilder()
+            .term('laptop')
+            .and()
+            .phrase('high performance')
+    )
+    // Combined filters
+    .filter({
+        logic: 'and',
+        filters: [
+            // Active products only
+            { field: 'isActive', operator: 'eq', value: true },
+            // Price range
+            { field: 'price', operator: 'ge', value: 500 },
+            { field: 'price', operator: 'le', value: 2000 },
+            // Has gaming tag
+            {
+                field: 'tags',
+                lambdaOperator: 'any',
+                expression: {
+                    field: '',
+                    operator: 'eq',
+                    value: 'gaming'
+                }
+            },
+            // Has good reviews
+            {
+                field: 'reviews',
+                lambdaOperator: 'any',
+                expression: {
+                    logic: 'and',
+                    filters: [
+                        { field: 'rating', operator: 'gt', value: 4 },
+                        { field: 'verified', operator: 'eq', value: true }
+                    ]
+                }
+            },
+            // Created this year
+            {
+                field: 'createdAt',
+                function: { type: 'year' },
+                operator: 'eq',
+                value: 2024
+            }
+        ]
+    })
+    // Sorting and pagination
+    .orderBy({ field: 'price', orderDirection: 'asc' })
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .top(20)
+    .skip(0)
+    .select('name', 'price', 'category')
+    .count()
     .toQuery();
-//  ^ ?expand=x
 ```
 
-You can do this with inner properties as well:
+## Supported OData v4 Features
 
-```javascript
-const item = {
-    x: { someProperty: { nestedProperty: '' } },
-}
-const queryBuilder = new OdataQueryBuilder<typeof item>();
-    .expand('x/someProperty') // you will get autocomplete for these properties
-    .toQuery();
-//  ^ ?expand=x/someProperty
-```
+### ✅ Fully Implemented
 
-# Features
+- **Operators**: `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `contains`, `startswith`, `endswith`, `indexof`
+- **String Functions**: `concat`, `contains`, `endswith`, `indexof`, `length`, `startswith`, `substring`, `tolower`, `toupper`, `trim`
+- **Math Functions**: `add`, `sub`, `mul`, `div`, `mod`, `round`, `floor`, `ceiling`
+- **Date Functions**: `year`, `month`, `day`, `hour`, `minute`, `second`, `now`, `date`, `time`
+- **Lambda Operators**: `any`, `all` with nested support
+- **Logic Operators**: `and`, `or` with grouping
+- **Query Options**: `$filter`, `$select`, `$expand`, `$orderby`, `$top`, `$skip`, `$count`, `$search`
+- **Advanced Features**: Field references, property transformations, case-insensitive filtering, GUID support
 
-- Generate oData4 queries with typesafe objects.
-    - Check of field, value and possible operator for a filter
-    - Orderby, Select only fields of your model
-    - **Autocomplete** for every property in your filter, orderby, etc...
-    - Filtering of arrays in your model
-    - Filters can be added with strings that will get typechecked
-- Generate Queries to manipluate data (soon™)
+### Type Safety Features
 
-# ToDos
+- **Strict TypeScript**: Perfect autocomplete for all properties and methods
+- **Compile-time Validation**: Catch errors before runtime
+- **Operator Restrictions**: Only valid operators for each field type
+- **Deep Object Navigation**: Full autocomplete for nested properties
+- **Function Parameter Validation**: Ensures correct function usage
 
-- [x] Add **select** query
-- [x] Add **orderby** with order direction asc or desc
-- [x] Add single **filter** support with lambda expressions
-- [x] Add expand support
-- [ ] Add odata function support (partially done)
-- [x] Add search support
-- [ ] Add support for data modification queries with odata
+## Contributing
 
 Your contributions are welcome! If there's a feature you'd like to see in odata-builder, or if you encounter any issues, please feel free to open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License.
