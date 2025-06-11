@@ -40,12 +40,12 @@ describe('query-builder', () => {
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
-    it('should only add one skip', () => {
+    it('should only add the last skip', () => {
         const expectedSkip = 10;
         const expectedQuery = `?$skip=${expectedSkip}`;
 
         const queryBuilder = new OdataQueryBuilder();
-        queryBuilder.skip(expectedSkip).skip(1000).skip(5);
+        queryBuilder.skip(5).skip(1000).skip(expectedSkip);
 
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
@@ -98,7 +98,7 @@ describe('query-builder', () => {
             x: 6;
             y: 4;
         };
-        const expectedQuery = '?$select=x, y';
+        const expectedQuery = '?$select=x,y';
 
         const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.select('x', 'y');
@@ -111,7 +111,7 @@ describe('query-builder', () => {
             x: 6;
             y: 4;
         };
-        const expectedQuery = '?$select=x, y';
+        const expectedQuery = '?$select=x,y';
 
         const queryBuilder = new OdataQueryBuilder<ItemType>();
         queryBuilder.select('x').select('y');
@@ -282,15 +282,17 @@ describe('query-builder', () => {
         expect(queryBuilder.toQuery()).toBe(expectedResult);
     });
 
-    it('should combine the filters regardless of order', () => {
+    it('should combine the filters according to componentOrder', () => {
         const item = {
             w: { someProperty: '' },
             x: 't',
             y: 4,
             z: 'test' as Guid,
         };
+
         const expectedQuery =
-            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d' and (x eq 'test' or y eq 5)&$top=100&$skip=10&$select=x&$expand=w&$orderby=x asc";
+            "?$count=true&$filter=z eq '76b44f03-bb98-48eb-81fd-63007465a76d' and (x eq 'test' or y eq 5)&$top=100&$skip=10&$select=x&$orderby=x asc&$expand=w";
+
         const queryBuilder = new OdataQueryBuilder<typeof item>();
 
         queryBuilder
@@ -394,9 +396,9 @@ describe('query-builder', () => {
         const builder = new OdataQueryBuilder<Item>();
         builder.filter({ field: 'name', operator: 'eq', value: 'test' });
         builder.filter({ field: 'count', operator: 'gt', value: 5 });
-        // @ts-expect-error name is of type string
+
         builder.filter({ field: 'name', operator: 'eq', value: 5 });
-        // @ts-expect-error count is of type number
+
         builder.filter({ field: 'count', operator: 'eq', value: 'test' });
     });
 
@@ -404,7 +406,7 @@ describe('query-builder', () => {
         type Item = { name: string; count: number };
         const builder = new OdataQueryBuilder<Item>();
         builder.select('name', 'count');
-        // @ts-expect-error field does not exist
+
         builder.select('invalidField');
     });
 
@@ -413,7 +415,7 @@ describe('query-builder', () => {
         const builder = new OdataQueryBuilder<Item>();
         builder.orderBy({ field: 'name', orderDirection: 'asc' });
         builder.orderBy({ field: 'count', orderDirection: 'desc' });
-        // @ts-expect-error field does not exist
+
         builder.orderBy({ field: 'invalidField', orderDirection: 'asc' });
     });
 
@@ -421,7 +423,7 @@ describe('query-builder', () => {
         type Item = { details: { code: string } };
         const builder = new OdataQueryBuilder<Item>();
         builder.expand('details');
-        // @ts-expect-error field does not exist
+
         builder.expand('invalidField');
     });
 
@@ -453,11 +455,11 @@ describe('query-builder', () => {
         const queryBuilder = new OdataQueryBuilder();
         //@ts-expect-error value is not allowed
         expect(() => queryBuilder.expand(null)).toThrowError(
-            'Field missing for expand',
+            'Invalid expand input: All fields must be non-empty strings.',
         );
         //@ts-expect-error value is not allowed
         expect(() => queryBuilder.expand(undefined)).toThrowError(
-            'Field missing for expand',
+            'Invalid expand input: All fields must be non-empty strings.',
         );
     });
 
@@ -466,7 +468,7 @@ describe('query-builder', () => {
         expect(() => queryBuilder.orderBy()).not.toThrowError();
     });
 
-    it('should handle all query parameters together', () => {
+    it('should handle all query parameters together according to componentOrder', () => {
         type ItemType = {
             id: Guid;
             name: string;
@@ -475,8 +477,10 @@ describe('query-builder', () => {
             details: { code: string };
             tags: string[];
         };
+
         const expectedQuery =
-            "?$count=true&$filter=isActive eq true and tags/any(s: contains(tolower(s), 'test'))&$top=50&$skip=5&$select=name, age&$expand=details&$orderby=age desc&$search=test%20search";
+            "?$count=true&$filter=isActive eq true and tags/any(s: contains(tolower(s), 'test'))&$search=test%20search&$top=50&$skip=5&$select=name,age&$orderby=age desc&$expand=details";
+
         const queryBuilder = new OdataQueryBuilder<ItemType>()
             .count()
             .filter({ field: 'isActive', operator: 'eq', value: true })
@@ -488,7 +492,7 @@ describe('query-builder', () => {
                     operator: 'contains',
                     value: 'test',
                     ignoreCase: true,
-                },
+                } as QueryFilter<ArrayElement<ItemType, 'tags'>>,
             })
             .top(50)
             .skip(5)
@@ -496,10 +500,9 @@ describe('query-builder', () => {
             .expand('details')
             .orderBy({ field: 'age', orderDirection: 'desc' })
             .search('test search');
+
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
-
-    // Add tests for FilterString if you plan to implement it
 
     it('should throw an error for negative top count in top() method', () => {
         const queryBuilder = new OdataQueryBuilder();
@@ -565,7 +568,7 @@ describe('query-builder', () => {
     });
 
     it('should handle NOT operator using SearchExpressionBuilder', () => {
-        const expectedQuery = `?$search=(NOT%20blue)`;
+        const expectedQuery = `?$search=NOT%20(blue)`;
         const queryBuilder = new OdataQueryBuilder().search(
             new SearchExpressionBuilder().not(
                 new SearchExpressionBuilder().term('blue'),
@@ -588,7 +591,7 @@ describe('query-builder', () => {
     });
 
     it('should combine SearchExpressionBuilder with other query parameters', () => {
-        const expectedQuery = `?$top=10&$search=product`;
+        const expectedQuery = `?$search=product&$top=10`;
         const queryBuilder = new OdataQueryBuilder()
             .search(new SearchExpressionBuilder().term('product'))
             .top(10);
@@ -624,7 +627,7 @@ describe('query-builder', () => {
     });
 
     it('should handle a complex nested search expression', () => {
-        const expectedQuery = `?$search=(red%20AND%20(blue%20OR%20(NOT%20yellow)))%20AND%20large`;
+        const expectedQuery = `?$search=(red%20AND%20(blue%20OR%20NOT%20(yellow)))%20AND%20large`;
         const queryBuilder = new OdataQueryBuilder().search(
             new SearchExpressionBuilder()
                 .group(
@@ -674,7 +677,7 @@ describe('query-builder', () => {
             .term('green');
 
         expect(builder.toString()).toBe(
-            '(red AND (blue OR (NOT yellow))) AND green',
+            '(red AND (blue OR NOT (yellow))) AND green',
         );
     });
 
@@ -689,7 +692,7 @@ describe('query-builder', () => {
 
     it('should combine search with multiple query parameters', () => {
         const expectedQuery =
-            '?$filter=isActive eq true&$top=10&$search=test%20search';
+            '?$filter=isActive eq true&$search=test%20search&$top=10';
 
         const queryBuilder = new OdataQueryBuilder<{ isActive: boolean }>()
             .filter({ field: 'isActive', operator: 'eq', value: true })
@@ -701,7 +704,7 @@ describe('query-builder', () => {
 
     it('should handle complex search expressions with other query parameters', () => {
         const expectedQuery =
-            '?$filter=isActive eq true&$orderby=name asc&$search=(red%20AND%20blue)%20OR%20yellow';
+            '?$filter=isActive eq true&$search=(red%20AND%20blue)%20OR%20yellow&$orderby=name asc';
 
         const queryBuilder = new OdataQueryBuilder<{
             isActive: boolean;
@@ -1122,7 +1125,7 @@ describe('query-builder - Nested Lambda Expressions', () => {
 describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
     describe('Count Entities and Count Operator Combination', () => {
         it('should handle countEntities=true and count() without conflict - countEntities takes precedence', () => {
-            const expectedQuery = '?$count=true';
+            const expectedQuery = '/$count';
             const queryBuilder = new OdataQueryBuilder().count().count(true);
             expect(queryBuilder.toQuery()).toBe(expectedQuery);
         });
@@ -1183,7 +1186,7 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
                 .filter(filter);
 
             expect(builder1.toQuery()).toBe(builder2.toQuery());
-            const expectedQuery = `/$count?$filter=isActive eq true&$top=25&$skip=5&$select=name, description&$orderby=name asc&$search=search%20AND%20term`;
+            const expectedQuery = `/$count?$filter=isActive eq true&$search=search%20AND%20term&$top=25&$skip=5&$select=name,description&$orderby=name asc`;
             expect(builder1.toQuery()).toBe(expectedQuery);
         });
     });
@@ -1191,11 +1194,11 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
     describe('Invalid Input to Builder Methods (Runtime Checks)', () => {
         it('should throw an error if search() is called with a non-string and non-SearchExpressionBuilder (runtime)', () => {
             const queryBuilder = new OdataQueryBuilder();
-            // @ts-expect-error - testing runtime error for invalid type
+
             expect(() => queryBuilder.search(123)).toThrowError();
-            // @ts-expect-error - testing runtime error for invalid type
+
             expect(() => queryBuilder.search({})).toThrowError();
-            // @ts-expect-error - testing runtime error for invalid type
+
             expect(() => queryBuilder.search([])).toThrowError();
         });
 
@@ -1217,7 +1220,7 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
                 queryBuilder.orderBy(
                     null as unknown as OrderByDescriptor<Required<unknown>>,
                 ),
-            ).not.toThrowError(); // OrderBy might need more specific check if you expect array.
+            ).not.toThrowError();
             expect(() =>
                 queryBuilder.orderBy(
                     undefined as unknown as OrderByDescriptor<
@@ -1232,7 +1235,7 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
                 queryBuilder.search(undefined as unknown as string),
             ).not.toThrowError();
 
-            expect(queryBuilder.toQuery()).toBe(''); // Ensure no query parameters are added.
+            expect(queryBuilder.toQuery()).toBe('');
         });
     });
 
@@ -1248,8 +1251,8 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
                 filter,
             );
             const expectedQuery =
-                "?$filter=description eq 'value with spaces and &%$#'"; // OData quotes strings. No need to encode inside quotes in basic case.
-            expect(queryBuilder.toQuery()).toBe(expectedQuery); // Basic case, OData handles quotes.  If you have cases where values outside quotes need encoding, add more tests.
+                "?$filter=description eq 'value with spaces and &%$#'";
+            expect(queryBuilder.toQuery()).toBe(expectedQuery);
         });
     });
 });

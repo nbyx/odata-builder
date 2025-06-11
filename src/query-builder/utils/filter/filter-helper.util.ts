@@ -1,7 +1,8 @@
-import { Guid } from 'src';
+import { Guid } from 'src/query-builder/types/utils/util.types';
+import { StringFunctionalOperators } from 'src/query-builder/types/filter/query-filter.type';
 
-export const operatorTypeMap: Record<string, string[]> = {
-    string: [
+export const operatorTypeMap: Record<string, ReadonlyArray<string>> = {
+    string: Object.freeze([
         'eq',
         'ne',
         'contains',
@@ -9,37 +10,45 @@ export const operatorTypeMap: Record<string, string[]> = {
         'endswith',
         'substringof',
         'indexof',
-        'concat',
-    ],
-    number: ['eq', 'ne', 'lt', 'le', 'gt', 'ge'],
-    boolean: ['eq', 'ne'],
-    Date: ['eq', 'ne', 'lt', 'le', 'gt', 'ge'],
-    Guid: ['eq', 'ne'],
-    null: ['eq', 'ne'],
+    ]),
+    number: Object.freeze(['eq', 'ne', 'lt', 'le', 'gt', 'ge']),
+    boolean: Object.freeze(['eq', 'ne']),
+    Date: Object.freeze(['eq', 'ne', 'lt', 'le', 'gt', 'ge']),
+    Guid: Object.freeze(['eq', 'ne']),
+    null: Object.freeze(['eq', 'ne']),
 };
 
-export const transformTypeMap: Record<string, string[]> = {
-    string: ['tolower', 'toupper', 'trim', 'length'],
-    number: ['round', 'floor', 'ceiling'],
-    Date: ['year', 'month', 'day', 'hour', 'minute', 'second'],
-    Guid: ['tolower'],
+export const transformTypeMap: Record<string, ReadonlyArray<string>> = {
+    string: Object.freeze(['tolower', 'toupper', 'trim', 'length']),
+    number: Object.freeze(['round', 'floor', 'ceiling']),
+    Date: Object.freeze(['year', 'month', 'day', 'hour', 'minute', 'second']),
+    Guid: Object.freeze(['tolower']),
 };
 
-export const isValidOperator = (type: string, operator: string): boolean => {
+export const odataStringFunctions: ReadonlySet<StringFunctionalOperators> =
+    new Set<StringFunctionalOperators>([
+        'contains',
+        'startswith',
+        'endswith',
+        'substringof',
+        'indexof',
+    ]);
+
+export function isValidOperator(type: string, operator: string): boolean {
     const validOperators = operatorTypeMap[type] || [];
     return validOperators.includes(operator);
-};
+}
 
-export const isValidTransform = (
+export function isValidTransform(
     type: string,
-    transforms?: string[],
-): boolean => {
-    if (!transforms) return true;
+    transforms?: ReadonlyArray<string>,
+): boolean {
+    if (!transforms || transforms.length === 0) return true;
     const validTransforms = transformTypeMap[type] || [];
     return transforms.every(t => validTransforms.includes(t));
-};
+}
 
-export const getValueType = (value: unknown): string => {
+export function getValueType(value: unknown): string {
     if (value === null) return 'null';
     if (value instanceof Date) return 'Date';
     if (typeof value === 'string' && isGuid(value)) return 'Guid';
@@ -47,10 +56,11 @@ export const getValueType = (value: unknown): string => {
     if (typeof value === 'boolean') return 'boolean';
     if (typeof value === 'string') return 'string';
     return 'unknown';
-};
+}
 
-export const isGuid = (val: unknown): val is Guid =>
-    typeof val === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+export function isGuid(val: unknown): val is Guid {
+    if (typeof val !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         val,
     );
+}

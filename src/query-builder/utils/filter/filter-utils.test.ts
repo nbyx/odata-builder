@@ -1,5 +1,6 @@
 import { toFilterQuery } from './filter-utils';
 import {
+    ArrayElement,
     FilterOperators,
     QueryFilter,
 } from 'src/query-builder/types/filter/query-filter.type';
@@ -121,7 +122,7 @@ describe('toFilterQuery', () => {
                     field: 'name',
                     operator: 'eq',
                     value: 'Apple',
-                } as QueryFilter<{ name: string; quantity: number }>, // Typ explizit angeben
+                } as QueryFilter<{ name: string; quantity: number }>,
             },
         ];
 
@@ -173,6 +174,8 @@ describe('toFilterQuery', () => {
     });
 
     it('should handle a mix of basic, combined, and lambda filters', () => {
+        type TagElementType = ArrayElement<ItemType, 'tags'>;
+
         const filters: Array<QueryFilter<ItemType> | CombinedFilter<ItemType>> =
             [
                 { field: 'isActive', operator: 'eq', value: true },
@@ -188,20 +191,17 @@ describe('toFilterQuery', () => {
                     lambdaOperator: 'any',
                     expression: {
                         field: '',
-                        function: {
-                            type: '',
-                            value: ['test'],
-                        },
-                        operator: 'eq',
-                        value: 'true',
-                    },
+                        operator: 'contains',
+                        value: 'test',
+                        ignoreCase: true,
+                    } as QueryFilter<TagElementType>,
                 },
             ];
 
         const result = toFilterQuery(filters);
 
         expect(result).toBe(
-            `$filter=isActive eq true and (age gt 18 or name eq 'John') and tags/any(s: contains(s, 'test'))`,
+            `$filter=isActive eq true and (age gt 18 or name eq 'John') and tags/any(s: contains(tolower(s), 'test'))`,
         );
     });
 
@@ -219,7 +219,7 @@ describe('toFilterQuery', () => {
                 {
                     operator: 'eq',
                     value: true,
-                } as unknown as QueryFilter<ItemType>, // Ungültiger Filter ohne `field`
+                } as unknown as QueryFilter<ItemType>,
             ]),
         ).toThrowError('Invalid filter');
     });

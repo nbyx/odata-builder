@@ -1,370 +1,596 @@
 import { CombinedFilter } from '../../types/filter/combined-filter.type';
-
-import { isCombinedFilter } from './combined-filter-util';
-import { isBasicFilter } from './filter-utils';
+import { isCombinedFilter as isGloballyCombinedFilter } from './combined-filter-util';
+import { isBasicFilter as isTrulyBasicFilter } from './filter-utils';
 import { getValueType, isValidOperator } from './filter-helper.util';
 import {
-    ArithmeticFunctionDefinition,
-    ArrayElement,
-    ArrayFields,
-    DateTransform,
-    FieldReference,
-    QueryFilter,
-    SupportedFunction,
+AnySupportedFunction,
+ArithmeticFunctionDefinition,
+DateFunctionDefinition,
+DateTransform,
+FieldReference,
+FilterFields,
+FilterOperators,
+LambdaFilter,
+QueryFilter,
+StandardFilter,
+ArithmeticOperator,
+StringFilterOperators,
+DirectBooleanODataFunctionFilter,
 } from '../../types/filter/query-filter.type';
 
+type BaseFilterVariant<T> = Exclude<QueryFilter<T>, LambdaFilter<T>>;
+// Hilfstyp für den Cast innerhalb von visitBasicFilter, wenn eine Funktion vorhanden ist
+type FilterWithFunction = Extract<BaseFilterVariant<any>, { function: AnySupportedFunction<any> }>;
+
 interface FilterVisitor<T> {
-    visitBasicFilter(filter: QueryFilter<T>): string;
-    visitLambdaFilter(filter: QueryFilter<T>, prefix?: string): string;
-    visitCombinedFilter(filter: CombinedFilter<T>, prefix?: string): string;
+visitBasicFilter(filter: QueryFilter<T>): string;
+visitLambdaFilter(filter: LambdaFilter<T>, prefix?: string): string;
+visitCombinedFilter(filter: CombinedFilter<T>, prefix?: string): string;
 }
 
 export class ODataFilterVisitor<T> implements FilterVisitor<T> {
-    visitBasicFilter<U>(filter: QueryFilter<U>): string {
-        if (!('value' in filter)) {
-            throw new Error('Invalid BasicFilter: missing "value" property');
+public visitBasicFilter<U>(filter: QueryFilter<U>): string {
+if (!isTrulyBasicFilter(filter)) {
+throw new Error(
+'visitBasicFilter called with a non-basic filter type. This indicates a dispatching logic error.',
+);
+}
+const basicFilter = filter as BaseFilterVariant<U>;
+const fieldPath = String(basicFilter.field);
+
+      
+if (basicFilter.function) {
+        // basicFilter ist hier eine der Varianten von *QueryFilter<U>, die eine 'function' Eigenschaft hat.
+        // Dies sind die ComparisonFunctionFilter oder DirectBooleanODataFunctionFilter Teile.
+        const currentFunction = basicFilter.function;
+        if (
+            !currentFunction ||
+            typeof currentFunction.type !== 'string' ||
+            !currentFunction.type.trim()
+        ) {
+            throw new Error(
+                `Invalid function definition on field "${fieldPath}": "type" property is missing, not a string, or empty.`,
+            );
         }
 
-        if (filter.value === null) {
-            const leftSide =
-                'function' in filter && filter.function
-                    ? this.processFunction(filter.function, filter.field)
-                    : this.getTransformedField(filter);
+        const fieldForFunction = this.getTransformedFieldForFunction(basicFilter);
 
-            return `${leftSide} ${filter.operator} null`;
+        const functionCallString = this.processFunction(
+            currentFunction,
+            fieldForFunction,
+        );
+
+        const isDirectBooleanODataFunction =
+            currentFunction.type === 'contains' ||
+            currentFunction.type === 'startswith' ||
+            currentFunction.type === 'endswith';
+
+        if (isDirectBooleanODataFunction) {
+            // basicFilter ist hier DirectBooleanODataFunctionFilter
+            const directBoolFilter = basicFilter as DirectBooleanODataFunctionFilter<U, Extract<keyof U, string>>;
+            if (
+                directBoolFilter.operator !== undefined &&
+                directBoolFilter.value !== undefined && // value can be true, false, or null (if operator allows)
+                (directBoolFilter.operator === 'eq' || directBoolFilter.operator === 'ne') &&
+                (typeof directBoolFilter.value === 'boolean' || directBoolFilter.value === null)
+            ) {
+                return `${functionCallString} ${directBoolFilter.operator} ${this.formatValue(directBoolFilter.value)}`;
+            }
+            return functionCallString; // Impliziert 'eq true'
+        } else {
+            // basicFilter ist hier eine Variante von ComparisonFunctionFilter
+            // Die Eigenschaften operator und value sind hier Pflicht und typisiert durch FunctionReturnType
+            const comparisonFuncFilter = basicFilter as FilterWithFunction; // Breiterer Cast, um auf operator/value zuzugreifen
+
+            if (comparisonFuncFilter.operator === undefined || (comparisonFuncFilter.value === undefined && comparisonFuncFilter.value !== null) ) {
+                 throw new Error(`Operator and value are required for comparing the result of function type "${currentFunction.type}" on field "${fieldPath}".`);
+            }
+            const removeQuotesForFunctionValue = 'removeQuotes' in comparisonFuncFilter && comparisonFuncFilter.removeQuotes === true;
+
+            const valueForComparison = this.formatValue(
+                comparisonFuncFilter.value,
+                removeQuotesForFunctionValue,
+            );
+            return `${functionCallString} ${comparisonFuncFilter.operator} ${valueForComparison}`;
         }
+    }
 
-        const valueType = getValueType(filter.value);
+    // --- Code for non-function filters (StandardFilter) ---
+    const standardFilter = basicFilter as StandardFilter<U, unknown>;
 
-        if (valueType === 'unknown') {
-            throw new Error(`Unsupported value type: ${typeof filter.value}`);
-        }
+    if (standardFilter.operator === undefined || (standardFilter.value === undefined && standardFilter.value !== null)) {
+        throw new Error(`Operator and value are required for standard filter on field "${fieldPath}".`);
+    }
 
-        this.validateOperator(valueType, filter.operator);
+    const transformedField = this.getTransformedFieldStandard(standardFilter);
 
-        const transformedField = this.getTransformedField(filter);
+    if (standardFilter.value === null) {
+        return `${transformedField} ${standardFilter.operator} null`;
+    }
 
-        if (filter.value instanceof Date) {
-            if ('transform' in filter && filter.transform.length) {
+    const valueType = getValueType(standardFilter.value);
+    if (valueType === 'unknown') {
+        throw new Error(
+            `Unsupported value type: ${typeof standardFilter.value} on field "${fieldPath}".`,
+        );
+    }
+    this.validateOperator(
+        valueType,
+        standardFilter.operator as FilterOperators<unknown>,
+    );
+
+    if (standardFilter.value instanceof Date) {
+            const dateValue: Date = standardFilter.value;
+
+            const dateStandardFilter = standardFilter as StandardFilter<U, Date>;
+
+            if (dateStandardFilter.transform && dateStandardFilter.transform.length > 0) {
                 const transformedValue = this.applyDateTransforms(
-                    filter.value,
-                    filter.transform as DateTransform[],
+                    dateValue,
+                    dateStandardFilter.transform,
                 );
-                return `${transformedField} ${filter.operator} ${transformedValue}`;
+                return `${transformedField} ${dateStandardFilter.operator} ${transformedValue}`;
             } else {
-                const leftSide =
-                    'function' in filter && filter.function
-                        ? this.processFunction(filter.function, filter.field)
-                        : transformedField;
-                // Konvertiere Datum in ISO-String
-                const isoDate = filter.value.toISOString();
-                return `${leftSide} ${filter.operator} ${isoDate}`;
+                const isoDate = dateValue.toISOString();
+                return `${transformedField} ${dateStandardFilter.operator} ${isoDate}`;
             }
         }
 
-        if (typeof filter.value === 'string') {
-            const transformedValue =
-                'ignoreCase' in filter && filter.ignoreCase
-                    ? filter.value.toLowerCase()
-                    : filter.value;
-
-            const value = filter.removeQuotes
-                ? transformedValue
-                : `'${transformedValue}'`;
-
-            const leftSide =
-                'function' in filter && filter.function
-                    ? this.processFunction(filter.function, filter.field)
-                    : transformedField;
-
-            return `${leftSide} ${filter.operator} ${value}`;
+    if (typeof standardFilter.value === 'string') {
+        let processedValue = standardFilter.value;
+        const stringStandardFilter = standardFilter as StandardFilter<U, string>;
+        if (stringStandardFilter.ignoreCase) {
+            processedValue = processedValue.toLowerCase();
         }
-
-        if (typeof filter.value === 'number') {
-            const leftSide =
-                'function' in filter && filter.function
-                    ? this.processFunction(filter.function, filter.field)
-                    : transformedField;
-            return `${leftSide} ${filter.operator} ${filter.value}`;
+        const valueStr = stringStandardFilter.removeQuotes
+            ? processedValue
+            : `'${processedValue.replace(/'/g, "''")}'`;
+        const op = stringStandardFilter.operator as StringFilterOperators;
+        switch (op) {
+            case 'contains':
+            case 'startswith':
+            case 'endswith':
+                return `${op}(${transformedField}, ${valueStr})`;
+            case 'substringof':
+                return `substringof(${valueStr}, ${transformedField})`;
+            case 'indexof':
+                return `indexof(${transformedField}, ${valueStr})`;
+            default:
+                return `${transformedField} ${op} ${valueStr}`;
         }
-
-        return `${transformedField} ${filter.operator} ${String(filter.value)}`;
     }
 
-    visitLambdaFilter<U>(
-        filter: QueryFilter<U>,
-        parentPrefix?: string,
-    ): string {
+    if (typeof standardFilter.value === 'number') {
+        return `${transformedField} ${standardFilter.operator} ${standardFilter.value}`;
+    }
+    return `${transformedField} ${standardFilter.operator} ${String(standardFilter.value)}`;
+}
+
+public visitLambdaFilter<U>(
+    filter: LambdaFilter<U>,
+    parentLambdaVar?: string,
+): string {
+    if (!filter.expression || typeof filter.expression !== 'object') {
+        throw new Error(
+            `Invalid LambdaFilter on field "${String(filter.field)}": "expression" property is missing or not an object.`,
+        );
+    }
+
+    const currentLambdaVar = parentLambdaVar
+        ? String.fromCharCode(parentLambdaVar.charCodeAt(0) + 1)
+        : 's';
+    const collectionFieldPath = String(filter.field);
+    const odataCollectionPath = this.getPrefixedField(
+        collectionFieldPath,
+        parentLambdaVar,
+    );
+    const expressionQuery = this.visitExpression(
+        filter.expression,
+        currentLambdaVar,
+    );
+    return `${odataCollectionPath}/${filter.lambdaOperator}(${currentLambdaVar}: ${expressionQuery})`;
+}
+
+private visitExpression<ExprType>(
+    expression: QueryFilter<ExprType> | CombinedFilter<ExprType>,
+    lambdaVarContext?: string,
+): string {
+    if (typeof expression !== 'object' || expression === null) {
+        throw new Error(
+            `Invalid expression encountered: expression is not an object or is null. Value: ${String(expression)}`,
+        );
+    }
+
+    if (isGloballyCombinedFilter(expression)) {
         if (
-            !('lambdaOperator' in filter) ||
-            !filter.lambdaOperator ||
-            !('expression' in filter) ||
-            !filter.expression
-        ) {
-            throw new Error(`Invalid LambdaFilter: ${JSON.stringify(filter)}`);
-        }
-
-        // Generate new parameter name based on parent
-        const currentParam = parentPrefix
-            ? String.fromCharCode(parentPrefix.charCodeAt(0) + 1)
-            : 's'; // Start with 's' if no parent
-
-        const expression = filter.expression;
-        const field = this.getPrefixedField(filter.field, parentPrefix);
-
-        if (isCombinedFilter(expression)) {
-            const subQuery = this.visitCombinedFilter(expression, currentParam);
-            return `${field}/${filter.lambdaOperator}(${currentParam}: ${subQuery})`;
-        }
-
-        if (
-            isLambdaFilter(
-                expression as QueryFilter<ArrayElement<U, ArrayFields<U>>>,
+            !Array.isArray(
+                (expression as CombinedFilter<ExprType>).filters,
             )
         ) {
-            const nestedQuery = this.visitLambdaFilter(
-                expression as QueryFilter<ArrayElement<U, ArrayFields<U>>>,
-                currentParam,
+            throw new Error(
+                'Invalid CombinedFilter: "filters" property is missing or not an array.',
             );
-            return `${field}/${filter.lambdaOperator}(${currentParam}: ${nestedQuery})`;
         }
+        return this.visitCombinedFilter(
+            expression as CombinedFilter<ExprType>,
+            lambdaVarContext,
+        );
+    }
+    if (this.isLambdaFilterInternal(expression)) {
+        return this.visitLambdaFilter(
+            expression as LambdaFilter<ExprType>,
+            lambdaVarContext,
+        );
+    }
+    if (isTrulyBasicFilter(expression)) {
+        const basicFilter = expression as BaseFilterVariant<ExprType>;
+        const basicExprField = String(basicFilter.field);
+        const actualFieldPath: string = basicExprField as string;
 
-        if (isBasicFilter(expression)) {
-            const prefixedExpression = {
-                ...expression,
-                field: this.getPrefixedField(
-                    expression.field || '',
-                    currentParam,
-                ),
-                ignoreCase:
-                    'ignoreCase' in expression
-                        ? expression.ignoreCase
-                        : undefined,
-                removeQuotes:
-                    'removeQuotes' in expression
-                        ? expression.removeQuotes
-                        : undefined,
-                transform:
-                    'transform' in expression
-                        ? expression.transform
-                        : undefined,
-            } as QueryFilter<U>;
-            const subQuery = this.visitBasicFilter(prefixedExpression);
-            return `${field}/${filter.lambdaOperator}(${currentParam}: ${subQuery})`;
-        }
+        const prefixedField =
+            actualFieldPath === ''
+                ? lambdaVarContext
+                : this.getPrefixedField(actualFieldPath, lambdaVarContext);
 
+        const fieldToUse = prefixedField || actualFieldPath;
+        const basicQueryFilterWithCorrectedField = {
+            ...basicFilter,
+            field: fieldToUse as FilterFields<ExprType, unknown>,
+        } as QueryFilter<ExprType>;
+        return this.visitBasicFilter(basicQueryFilterWithCorrectedField);
+    }
+    throw new Error(
+        `Unsupported expression type in visitExpression. Expression: ${JSON.stringify(expression)}`,
+    );
+}
+
+public visitCombinedFilter<U>(
+    filter: CombinedFilter<U>,
+    lambdaVarContext?: string,
+): string {
+    if (!filter.filters || !Array.isArray(filter.filters)) {
         throw new Error(
-            `Invalid expression in LambdaFilter: ${JSON.stringify(expression)}`,
+            'Invalid CombinedFilter: "filters" property is missing or not an array.',
         );
     }
-
-    visitCombinedFilter<U>(
-        filter: CombinedFilter<U>,
-        currentPrefix?: string,
-    ): string {
-        const combinedQueries = filter.filters
-            .map(subFilter => {
-                if (isCombinedFilter(subFilter)) {
-                    return this.visitCombinedFilter(subFilter, currentPrefix);
-                }
-                if (isLambdaFilter(subFilter as QueryFilter<U>)) {
-                    return this.visitLambdaFilter(
-                        subFilter as QueryFilter<U>,
-                        currentPrefix,
-                    );
-                }
-                if (isBasicFilter(subFilter)) {
-                    const prefixedFilter = {
-                        ...subFilter,
-                        field: this.getPrefixedField(
-                            subFilter.field,
-                            currentPrefix,
-                        ),
-                    } as QueryFilter<U>;
-                    return this.visitBasicFilter(prefixedFilter);
-                }
+    if (filter.filters.length === 0) {
+        return '';
+    }
+    const combinedQueries = filter.filters
+        .map(subFilter => {
+            if (typeof subFilter !== 'object' || subFilter === null) {
                 throw new Error(
-                    `Invalid sub-filter: ${JSON.stringify(subFilter)}`,
+                    `Invalid sub-filter in CombinedFilter: sub-filter is not an object or is null. Value: ${String(subFilter)}`,
                 );
-            })
-            .join(` ${filter.logic} `);
+            }
+            return this.visitExpression(subFilter, lambdaVarContext);
+        })
+        .filter(q => q && q.length > 0)
+        .join(` ${filter.logic} `);
 
-        return combinedQueries.includes(' ')
-            ? `(${combinedQueries})`
-            : combinedQueries;
+    if (combinedQueries.length > 0) {
+        if (
+            filter.filters.length === 1 &&
+            combinedQueries.startsWith('(') &&
+            combinedQueries.endsWith(')')
+        ) {
+            return combinedQueries;
+        }
+        return `(${combinedQueries})`;
     }
+    return '';
+}
 
-    private getTransformedField<U>(filter: QueryFilter<U>): string {
-        // Alle definierten Transformationen zusammenfassen
-        const transforms = [
-            ...('ignoreCase' in filter && filter.ignoreCase ? ['tolower'] : []),
-            ...('transform' in filter && Array.isArray(filter.transform)
-                ? filter.transform
-                : []),
-        ];
-
-        // Transformationen auf das Feld anwenden
-        return transforms.reduce(
-            (acc, transform) => `${transform}(${acc})`,
-            `${String(filter.field)}`,
+private getTransformedFieldForFunction<U>(filter: BaseFilterVariant<U>): string {
+    const fieldStr = String(filter.field);
+    let currentField: string = fieldStr as string;
+    if (
+        filter.transform &&
+        Array.isArray(filter.transform) &&
+        filter.transform.length > 0
+    ) {
+        const transformNames = filter.transform as ReadonlyArray<string>;
+        currentField = transformNames.reduce(
+            (acc, transformName) => `${transformName}(${acc})`,
+            currentField,
         );
     }
+    return currentField;
+}
 
-    private applyDateTransforms(
-        date: Date,
-        transforms: DateTransform[],
-    ): number {
-        const dateTransforms: Record<DateTransform, (date: Date) => number> = {
-            year: date => date.getUTCFullYear(),
-            month: date => date.getUTCMonth() + 1,
-            day: date => date.getUTCDate(),
-            hour: date => date.getUTCHours(),
-            minute: date => date.getUTCMinutes(),
-            second: date => date.getUTCSeconds(),
-        };
+private getTransformedFieldStandard<U>(filter: StandardFilter<U, unknown>): string {
+    const fieldStr = String(filter.field);
+    let currentField: string = fieldStr as string;
 
-        return transforms.reduce((acc, transform) => {
-            const transformFn = dateTransforms[transform];
-            if (!transformFn) {
-                throw new Error(`Unsupported DateTransform: ${transform}`);
-            }
-            return transformFn(new Date(acc)); // Transformierten Wert erneut anwenden
-        }, +date); // Datum in Timestamp umwandeln
+    if (typeof filter.value === 'string' && filter.ignoreCase) {
+        currentField = `tolower(${currentField})`;
     }
 
-    private processFunction<T>(
-        func: SupportedFunction<T>,
-        field: string,
-    ): string {
-        if (!func.type) {
+    if (
+        filter.transform &&
+        Array.isArray(filter.transform) &&
+        filter.transform.length > 0
+    ) {
+        const transformNames = filter.transform as ReadonlyArray<string>;
+        currentField = transformNames.reduce(
+            (acc, transformName) => `${transformName}(${acc})`,
+            currentField,
+        );
+    }
+    return currentField;
+}
+
+
+private applyDateTransforms(
+    date: Date,
+    transforms: ReadonlyArray<DateTransform>,
+): number {
+    const dateTransformsMap: Record<DateTransform, (d: Date) => number> = {
+        year: d => d.getUTCFullYear(),
+        month: d => d.getUTCMonth() + 1,
+        day: d => d.getUTCDate(),
+        hour: d => d.getUTCHours(),
+        minute: d => d.getUTCMinutes(),
+        second: d => d.getUTCSeconds(),
+    };
+    if (!transforms || transforms.length === 0) { // Sicherstellen, dass transforms ein Array und nicht leer ist
+            throw new Error("applyDateTransforms called with an invalid or empty transforms array.");
+        }
+    // OData typically does not chain these: year(month(date)) is invalid.
+    // We apply only the first transform.
+    const transformToApply: DateTransform = transforms[0]!;
+     if (!(transformToApply in dateTransformsMap)) {
+             throw new Error(`Unsupported DateTransform: ${String(transformToApply)}`);
+        }
+
+    const transformFn = dateTransformsMap[transformToApply];
+    if (!transformFn)
+        throw new Error(`Unsupported DateTransform: ${transformToApply}`);
+    
+    const result = transformFn(date);
+    if (typeof result !== 'number') // Should be guaranteed by DateTransform return types
+        throw new Error(
+            `Date transformation did not result in a number. Transform: ${String(transformToApply)}. Res: ${String(result)}`,
+        );
+    return result;
+}
+
+private processFunction<U>(
+    func: AnySupportedFunction<U>,
+    field: string,
+): string {
+    const fieldAccess: string = field;
+    switch (func.type) {
+        case 'concat':
+            if (!func.values || !Array.isArray(func.values))
+                throw new Error(
+                    "Invalid function definition for 'concat': 'values' array is missing or not an array.",
+                );
+            break;
+        case 'contains':
+        case 'endswith':
+        case 'indexof':
+        case 'startswith':
+            if (func.value === undefined)
+                throw new Error(
+                    `Invalid function definition for '${func.type}': 'value' property is missing.`,
+                );
+            break;
+        case 'substring':
+            if (func.start === undefined)
+                throw new Error(
+                    "Invalid function definition for 'substring': 'start' property is missing.",
+                );
+            break;
+        case 'add':
+        case 'sub':
+        case 'mul':
+        case 'div':
+        case 'mod':
+            if (
+                (
+                    func as Extract<
+                        ArithmeticFunctionDefinition<U>,
+                        { type: ArithmeticOperator }
+                    >
+                ).operand === undefined
+            )
+                throw new Error(
+                    `Invalid function definition for '${func.type}': 'operand' property is missing.`,
+                );
+            break;
+        case 'date':
+        case 'time':
+            const fieldRefForDateOrTime = (
+                func as Extract<
+                    DateFunctionDefinition<U>,
+                    { type: 'date' | 'time' }
+                >
+            ).field;
+            if (fieldRefForDateOrTime === undefined)
+                throw new Error(
+                    `Invalid function definition for '${func.type}': 'field' property is missing.`,
+                );
+            this.validateFieldReference(fieldRefForDateOrTime);
+            break;
+        case 'length':
+        case 'tolower':
+        case 'toupper':
+        case 'trim':
+        case 'round':
+        case 'floor':
+        case 'ceiling':
+        case 'now':
+        case 'year':
+        case 'month':
+        case 'day':
+        case 'hour':
+        case 'minute':
+        case 'second':
+            break;
+        default: {
+            const _exhaustiveCheck: never = func;
             throw new Error(
-                'Invalid function definition: missing "type" property',
+                `Unhandled preliminary check for function type in processFunction: ${(_exhaustiveCheck as AnySupportedFunction<U>).type}`,
             );
         }
+    }
 
-        switch (func.type) {
-            case 'concat': {
-                const args = [
-                    field,
-                    ...func.values.map(v => this.formatValue(v)),
-                ];
-                return `concat(${args.join(', ')})`;
+    switch (func.type) {
+        case 'concat':
+            return `concat(${fieldAccess}, ${func.values.map(v => (typeof v === 'string' ? this.formatValue(v) : this.resolveFieldReference(v as FieldReference<U, string>))).join(', ')})`;
+        case 'contains':
+            return `contains(${fieldAccess}, ${typeof func.value === 'string' ? this.formatValue(func.value) : this.resolveFieldReference(func.value as FieldReference<U, string>)})`;
+        case 'endswith':
+            return `endswith(${fieldAccess}, ${typeof func.value === 'string' ? this.formatValue(func.value) : this.resolveFieldReference(func.value as FieldReference<U, string>)})`;
+        case 'indexof':
+            return `indexof(${fieldAccess}, ${typeof func.value === 'string' ? this.formatValue(func.value) : this.resolveFieldReference(func.value as FieldReference<U, string>)})`;
+        case 'length':
+            return `length(${fieldAccess})`;
+        case 'startswith':
+            return `startswith(${fieldAccess}, ${typeof func.value === 'string' ? this.formatValue(func.value) : this.resolveFieldReference(func.value as FieldReference<U, string>)})`;
+        case 'substring': {
+            const startArg =
+                typeof func.start === 'number'
+                    ? this.formatValue(func.start)
+                    : this.resolveFieldReference(
+                          func.start as FieldReference<U, number>,
+                      );
+            const argsStr = [startArg];
+            if (func.length !== undefined) {
+                const lengthArg =
+                    typeof func.length === 'number'
+                        ? this.formatValue(func.length)
+                        : this.resolveFieldReference(
+                              func.length as FieldReference<U, number>,
+                          );
+                argsStr.push(lengthArg);
             }
-            case 'contains':
-                return `contains(${field}, ${this.formatValue(func.value)})`;
-
-            case 'endswith':
-                return `endswith(${field}, ${this.formatValue(func.value)})`;
-
-            case 'indexof':
-                return `indexof(${field}, ${this.formatValue(func.value)})`;
-
-            case 'length':
-                return `length(${field})`;
-
-            case 'startswith':
-                return `startswith(${field}, ${this.formatValue(func.value)})`;
-
-            case 'substring': {
-                const args = [func.start];
-                if (func.length !== undefined) {
-                    args.push(func.length);
-                }
-                return `substring(${field}, ${args.map(arg => this.formatValue(arg)).join(', ')})`;
-            }
-
-            case 'add':
-            case 'sub':
-            case 'mul':
-            case 'div':
-            case 'mod':
-                return this.createArithmeticHandler<T>(func.type)(func, field);
-
-            case 'now':
-                return 'now()';
-
-            case 'date':
-                return `date(${this.resolveField(func.field)})`;
-
-            case 'time':
-                return `time(${this.resolveField(func.field)})`;
-
-            default:
-                throw new Error(
-                    `Unsupported function type: ${(func as { type: string }).type}`,
-                );
+            return `substring(${fieldAccess}, ${argsStr.join(', ')})`;
         }
-    }
-
-    private resolveField<T, V extends string | number | Date | boolean>(
-        field: FieldReference<T, V> | string,
-    ): string {
-        if (typeof field === 'string') {
-            return field;
+        case 'tolower':
+        case 'toupper':
+        case 'trim':
+            return `${func.type}(${fieldAccess})`;
+        case 'add':
+        case 'sub':
+        case 'mul':
+        case 'div':
+        case 'mod': {
+            const arithFunc = func as Extract<
+                ArithmeticFunctionDefinition<U>,
+                { type: ArithmeticOperator }
+            >;
+            const operandStr =
+                typeof arithFunc.operand === 'number'
+                    ? this.formatValue(arithFunc.operand)
+                    : this.resolveFieldReference(
+                          arithFunc.operand as FieldReference<U, number>,
+                      );
+            return `${fieldAccess} ${arithFunc.type} ${operandStr}`;
         }
-
-        if ('/' in field) {
-            return field.fieldReference;
-        }
-
-        throw new Error('Unsupported FieldReference type');
-    }
-
-    private createArithmeticHandler<T>(
-        operator: 'add' | 'sub' | 'mul' | 'div' | 'mod',
-    ) {
-        return (
-            func: ArithmeticFunctionDefinition<T>,
-            field: string,
-        ): string => {
-            if (!('operand' in func)) {
-                throw new Error(
-                    `Invalid function definition: missing "operand" property`,
-                );
-            }
-            return `${field} ${operator} ${this.formatValue(func.operand)}`;
-        };
-    }
-
-    private formatValue(value: unknown): string {
-        if (typeof value === 'string') {
-            return `'${value}'`;
-        }
-        if (value instanceof Date) {
-            return `${value.toISOString()}`;
-        }
-        if (typeof value === 'number' || typeof value === 'boolean') {
-            return String(value);
-        }
-        throw new Error(`Unsupported value type: ${typeof value}`);
-    }
-
-    private getPrefixedField(
-        field: string | number | symbol,
-        prefix?: string,
-    ): string {
-        const fieldStr = String(field);
-        if (!prefix) return fieldStr;
-        return fieldStr ? `${prefix}/${fieldStr}` : prefix;
-    }
-
-    private validateOperator(type: string, operator: string): void {
-        if (!isValidOperator(type, operator)) {
+        case 'round':
+        case 'floor':
+        case 'ceiling':
+            return `${func.type}(${fieldAccess})`;
+        case 'now':
+            return 'now()';
+        case 'date':
+            return `date(${this.resolveFieldReference(func.field)})`;
+        case 'time':
+            return `time(${this.resolveFieldReference(func.field)})`;
+        case 'year':
+        case 'month':
+        case 'day':
+        case 'hour':
+        case 'minute':
+        case 'second':
+            return `${func.type}(${fieldAccess})`;
+        default: {
+            const _exhaustiveCheck: never = func;
             throw new Error(
-                `Invalid operator "${operator}" for type "${type}"`,
+                `Unhandled function type in processFunction execution: ${(_exhaustiveCheck as AnySupportedFunction<U>).type}`,
             );
         }
     }
 }
 
-// Helper type guard for lambda filters
-function isLambdaFilter<T>(filter: QueryFilter<T>): filter is QueryFilter<T> & {
-    lambdaOperator: string;
-    expression: unknown;
-} {
-    return (
-        'lambdaOperator' in filter &&
-        typeof filter.lambdaOperator === 'string' &&
-        'expression' in filter
+private validateFieldReference<
+    U,
+    Val extends string | number | Date | boolean,
+>(fieldRef: FieldReference<U, Val> | undefined | null): void {
+    if (
+        typeof fieldRef !== 'object' ||
+        fieldRef === null ||
+        !('fieldReference' in fieldRef) ||
+        typeof fieldRef.fieldReference !== 'string' ||
+        !(fieldRef.fieldReference as string).trim()
+    ) {
+        throw new Error(
+            "Invalid FieldReference: It must be an object with a 'fieldReference' property that is a non-empty string.",
+        );
+    }
+}
+
+private resolveFieldReference<
+    U,
+    Val extends string | number | Date | boolean,
+>(fieldRef: FieldReference<U, Val>): string {
+    this.validateFieldReference(fieldRef);
+    return fieldRef.fieldReference as string;
+}
+
+private formatValue(value: unknown, removeQuotes = false): string {
+    if (value === null) return 'null';
+    if (typeof value === 'string')
+        return removeQuotes ? value : `'${value.replace(/'/g, "''")}'`;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'number' || typeof value === 'boolean')
+        return String(value);
+    throw new Error(
+        `Unsupported value type for formatting: ${typeof value}`,
     );
+}
+
+private getPrefixedField(
+    field: string | number | symbol,
+    prefix?: string,
+): string {
+    const fieldStr = String(field);
+    const fieldAsString: string = fieldStr as string;
+
+    if (!prefix) return fieldAsString;
+    if (fieldAsString === '') return prefix;
+    return `${prefix}/${fieldAsString}`;
+}
+
+private validateOperator<V>(
+    type: string,
+    operator: FilterOperators<V>,
+): void {
+    if (!isValidOperator(type, operator as string)) {
+        throw new Error(
+            `Invalid operator "${String(operator)}" for value type "${type}"`,
+        );
+    }
+}
+
+private isLambdaFilterInternal<InputType>(
+    filter: unknown,
+): filter is LambdaFilter<InputType> {
+    if (typeof filter !== 'object' || filter === null) return false;
+    const f = filter as Record<string, unknown>;
+    return (
+        'lambdaOperator' in f &&
+        (f['lambdaOperator'] === 'any' || f['lambdaOperator'] === 'all') &&
+        'expression' in f &&
+        f['expression'] !== null &&
+        typeof f['expression'] === 'object' &&
+        'field' in f &&
+        (isTrulyBasicFilter(f['expression']) ||
+            isGloballyCombinedFilter(f['expression']) ||
+            this.isLambdaFilterInternal(f['expression']))
+    );
+}
+
 }
