@@ -455,11 +455,11 @@ describe('query-builder', () => {
         const queryBuilder = new OdataQueryBuilder();
         //@ts-expect-error value is not allowed
         expect(() => queryBuilder.expand(null)).toThrowError(
-            'Invalid expand input: All fields must be non-empty strings.',
+            'Invalid expand input: Argument cannot be null or undefined.',
         );
         //@ts-expect-error value is not allowed
         expect(() => queryBuilder.expand(undefined)).toThrowError(
-            'Invalid expand input: All fields must be non-empty strings.',
+            'Invalid expand input: Argument cannot be null or undefined.',
         );
     });
 

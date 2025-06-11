@@ -16,7 +16,7 @@ import {
 } from '../../types/filter/query-filter.type';
 
 type BaseFilterVariant<T> = Exclude<QueryFilter<T>, LambdaFilter<T>>;
- 
+
 type FilterWithFunction = Extract<
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     BaseFilterVariant<any>,

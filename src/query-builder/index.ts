@@ -15,6 +15,7 @@ import {
     getValueType,
     isValidOperator,
 } from './utils/filter/filter-helper.util';
+import { isQueryFilter } from './utils/filter/is-query-filter-util';
 
 const countEntitiesQuery = '/$count';
 
@@ -112,9 +113,7 @@ export class OdataQueryBuilder<T> {
             );
         }
 
-        if (
-            selectProps.length === 0
-        ) {
+        if (selectProps.length === 0) {
             return this;
         }
 
@@ -154,7 +153,7 @@ export class OdataQueryBuilder<T> {
                 'Invalid filter input: Argument cannot be null or undefined. Pass an array or individual filter objects.',
             );
         }
-        
+
         if (filters.length === 0) {
             return this;
         }
@@ -184,7 +183,7 @@ export class OdataQueryBuilder<T> {
                         );
                     }
                 }
-            } else if (!isCombinedFilter(filter)) {
+            } else if (!isCombinedFilter(filter) && !isQueryFilter(filter)) {
                 throw new Error(
                     `Invalid filter input structure: ${JSON.stringify(filter)}`,
                 );
@@ -206,7 +205,7 @@ export class OdataQueryBuilder<T> {
                 'Invalid expand input: Argument cannot be null or undefined. Pass an array or individual strings.',
             );
         }
-        
+
         if (expandFields.length === 0) {
             return this;
         }
@@ -261,7 +260,7 @@ export class OdataQueryBuilder<T> {
         if (orderByInput.length === 0) {
             return this;
         }
-        
+
         // Handle single null/undefined parameter (plain JS usage)
         if (
             orderByInput.length === 1 &&
@@ -406,5 +405,4 @@ export class OdataQueryBuilder<T> {
         }
         return this;
     }
-
 }
