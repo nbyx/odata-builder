@@ -9,6 +9,9 @@
     },
     "homepage": "https://github.com/nbyx/odata-builder#readme",
     "main": "dist/odata-builder.js",
+    "engines": {
+        "node": ">=18.0.0"
+    },
     "scripts": {
         "build": "rollup --config rollup.config.js",
         "lint": "eslint --fix src/**",

@@ -1,14 +1,14 @@
-name: Workflow
+name: 'CI/CD Pipeline'
 
 on:
     push:
-        tags:
-            - 'v*'
         branches:
             - '**'
     pull_request:
         branches:
             - '**'
+    release:
+        types: [published]
     workflow_dispatch:
 
 concurrency:
@@ -16,6 +16,79 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # ============================================================================
+    # VERSION CONSISTENCY CHECK (for GitHub GUI releases)
+    # ============================================================================
+    
+    version-check:
+        name: 'Version Consistency Check'
+        if: github.event_name == 'release'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            version: ${{ steps.validate.outputs.version }}
+        steps:
+            - name: 'Checkout Code'
+              uses: actions/checkout@v4
+
+            - name: 'Validate Version Consistency'
+              id: validate
+              run: |
+                  PACKAGE_VERSION=$(jq -r '.version' package.json)
+                  RELEASE_TAG="${{ github.event.release.tag_name }}"
+                  TAG_VERSION=${RELEASE_TAG#v}  # Remove 'v' prefix if present
+                  
+                  echo "📦 Package version: $PACKAGE_VERSION"
+                  echo "🏷️  Release tag: $RELEASE_TAG"
+                  echo "🔍 Comparing: '$PACKAGE_VERSION' vs '$TAG_VERSION'"
+                  
+                  if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+                      echo ""
+                      echo "❌ VERSION MISMATCH DETECTED!"
+                      echo "================================"
+                      echo "package.json version: $PACKAGE_VERSION"
+                      echo "GitHub release tag:   $TAG_VERSION"
+                      echo ""
+                      echo "🔧 To fix this issue:"
+                      echo "1. Update package.json version:"
+                      echo "   npm version $TAG_VERSION --no-git-tag-version"
+                      echo ""
+                      echo "2. Commit and push the change:"
+                      echo "   git add package.json"
+                      echo "   git commit -m 'Bump version to $TAG_VERSION'"
+                      echo "   git push origin main"
+                      echo ""
+                      echo "3. Delete and recreate the release with the same tag"
+                      echo ""
+                      exit 1
+                  fi
+                  
+                  # Validate semantic version format
+                  if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      echo ""
+                      echo "❌ INVALID VERSION FORMAT!"
+                      echo "========================="
+                      echo "Found version: $PACKAGE_VERSION"
+                      echo ""
+                      echo "🎯 This project requires semantic versioning (MAJOR.MINOR.PATCH)."
+                      echo "Examples: 1.0.0, 2.1.5, 10.0.3"
+                      echo "Pre-release versions are not supported (e.g., 1.0.0-beta.1)"
+                      echo ""
+                      echo "🔧 To fix:"
+                      echo "1. Update to valid semantic version:"
+                      echo "   npm version <major|minor|patch> --no-git-tag-version"
+                      echo "2. Commit and recreate release"
+                      echo ""
+                      exit 1
+                  fi
+                  
+                  echo "✅ Version consistency validated: v$PACKAGE_VERSION"
+                  echo "🎯 Stable release version confirmed"
+                  echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    # ============================================================================
+    # EXISTING JOBS (Updated dependencies)
+    # ============================================================================
     pr-checks:
         if: ${{ github.event_name == 'pull_request' }}
         runs-on: ubuntu-latest
@@ -76,12 +149,24 @@ jobs:
                   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
               shell: bash
 
+            - name: Validate NPM Token Format
+              if: github.actor != 'dependabot[bot]'
+              run: |
+                  if [[ ! "$NPM_TOKEN" =~ ^npm_[A-Za-z0-9]{36}$ ]]; then
+                      echo "❌ NPM_TOKEN format appears invalid. Expected format: npm_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      echo "Please check your NPM token in repository secrets."
+                      exit 1
+                  fi
+                  echo "✅ NPM_TOKEN format validation passed"
+              env:
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     test:
         needs: check-secrets
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                node-version: [18, 20]
+                node-version: [18, 20, 22, 24]
         steps:
             - uses: actions/checkout@v3
             - name: Set up Node.js ${{ matrix.node-version }}
@@ -227,7 +312,7 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                node-version: [18, 20]
+                node-version: [18, 20, 22, 24]
         steps:
             - uses: actions/checkout@v3
 
@@ -344,13 +429,14 @@ jobs:
 
     audit:
         needs: check-secrets
+        if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-            - name: Set up Node.js 20
+            - name: Set up Node.js 22
               uses: actions/setup-node@v3
               with:
-                  node-version: '20'
+                  node-version: '22'
             - name: Cache Node.js modules
               uses: actions/cache@v3
               with:
@@ -471,132 +557,295 @@ jobs:
                   operationType: upsert
 
     build:
-        needs: [test, lint, audit]
+        name: 'Build & Package (CI)'
+        needs: [test, lint]
+        if: github.event_name != 'release'
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
-            - uses: actions/checkout@v3
-            - name: Set up Node.js 20
-              uses: actions/setup-node@v3
+            - name: 'Checkout Code'
+              uses: actions/checkout@v4
+              
+            - name: 'Setup Node.js'
+              uses: actions/setup-node@v4
               with:
-                  node-version: '20'
-            - name: Cache Node.js modules
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
-            - name: Cache build outputs
-              uses: actions/cache@v3
-              with:
-                  path: dist/
-                  key: ${{ runner.os }}-dist-${{ github.sha }}
-                  restore-keys: |
-                      ${{ runner.os }}-dist-
-            - name: Check for package-lock and package.json consistency
-              id: check-lockfile
+                  node-version: '22'
+                  cache: 'npm'
+            - name: 'Install Dependencies'
               run: |
-                  if ! npm ci --dry-run > /dev/null 2>&1; then
-                      echo "Lockfile and package.json are not in sync. Using 'npm install' instead."
-                      echo "USE_INSTALL=true" >> $GITHUB_ENV
+                  if npm ci --dry-run > /dev/null 2>&1; then
+                      echo "📦 Installing with npm ci..."
+                      npm ci
                   else
-                      echo "USE_INSTALL=false" >> $GITHUB_ENV
+                      echo "⚠️ Fallback to npm install"
+                      npm install
+                  fi
+            - name: 'Build Package'
+              run: |
+                  echo "🏗️ Building package..."
+                  npm run build
+                  
+                  if [ ! -d "dist" ] || [ -z "$(ls -A dist/)" ]; then
+                      echo "❌ Build failed - dist directory is empty"
+                      exit 1
+                  fi
+                  
+                  echo "✅ Build completed successfully"
+            - name: 'Upload Build Artifacts'
+              if: github.event_name == 'push'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: build-artifacts-${{ github.run_id }}
+                  path: dist/
+                  retention-days: 7
+
+    # ============================================================================
+    # RELEASE PIPELINE (triggered by GitHub GUI releases)
+    # ============================================================================
+    
+    release-build:
+        name: 'Release Build & Package'
+        needs: [version-check]
+        if: github.event_name == 'release'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - name: 'Checkout Code'
+              uses: actions/checkout@v4
+
+            - name: 'Setup Node.js'
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  cache: 'npm'
+
+            - name: 'Install Dependencies'
+              run: |
+                  if npm ci --dry-run > /dev/null 2>&1; then
+                      echo "📦 Installing with npm ci..."
+                      npm ci
+                  else
+                      echo "⚠️ Fallback to npm install"
+                      npm install
                   fi
 
-            - name: Install dependencies
+            - name: 'Run Tests'
               run: |
-                  if [ "$USE_INSTALL" = "true" ]; then
-                      npm install
-                  else
-                      npm ci
+                  echo "🧪 Running tests for release..."
+                  npm test
+
+            - name: 'Run Linting'
+              run: |
+                  echo "📏 Running linting for release..."
+                  npm run lint
+
+            - name: 'Build Package'
+              run: |
+                  echo "🏗️ Building release package..."
+                  npm run build
+                  
+                  if [ ! -d "dist" ] || [ -z "$(ls -A dist/)" ]; then
+                      echo "❌ Build failed - dist directory is empty"
+                      exit 1
                   fi
-            - name: Build
-              run: npm run build
-            - name: Prepare package for npm
+
+            - name: 'Prepare NPM Package'
               run: |
+                  echo "📦 Preparing package for npm..."
+                  
+                  # Verify required build files exist
+                  REQUIRED_FILES=("odata-builder.js" "odata-builder.esm.js" "odata-builder.d.ts")
+                  for file in "${REQUIRED_FILES[@]}"; do
+                      if [ ! -f "dist/$file" ]; then
+                          echo "❌ Required build file missing: dist/$file"
+                          exit 1
+                      fi
+                  done
+                  echo "✅ All required build files present"
+                  
+                  # Copy essential files
                   cp package.json dist/package.json
                   cp README.md dist/README.md
+                  
+                  # Copy LICENSE if it exists
+                  if [ -f LICENSE ]; then
+                      cp LICENSE dist/LICENSE
+                  fi
+                  
+                  # Update package.json with correct paths
                   cd dist
                   jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
                   jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
                   jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
-
-            - name: Check if dist directory is empty
-              id: check-dist
-              run: |
-                  if [ -z "$(ls -A dist/)" ]; then
-                    echo "No files found in dist directory, failing the job."
-                    exit 1
+                  
+                  # Remove dev-only fields
+                  jq 'del(.devDependencies, .scripts.dev, .scripts.build)' package.json > tmp.json && mv tmp.json package.json
+                  
+                  # Validate final package.json
+                  if ! jq empty package.json 2>/dev/null; then
+                      echo "❌ Generated package.json is invalid JSON"
+                      exit 1
                   fi
+                  echo "✅ Package preparation completed successfully"
 
-            - name: Sanitize ref name
-              if: github.event_name == 'push'
-              run: |
-                  echo "SANITIZED_REF_NAME=${GITHUB_REF_NAME//\//_}" >> $GITHUB_ENV
-
-            - name: Archive build artifacts
-              if: github.event_name == 'push'
+            - name: 'Upload Release Artifacts'
               uses: actions/upload-artifact@v4
               with:
-                  name: dist-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}
+                  name: npm-package-${{ github.run_id }}
                   path: dist/
+                  retention-days: 30
 
-    create-release:
-        needs: [build]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
+    request-release-approval:
+        name: 'Request NPM Publication Approval'
+        needs: [release-build, version-check]
+        if: github.event_name == 'release'
         runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - name: Check version consistency
-              run: |
-                  PACKAGE_VERSION=$(jq -r .version package.json)
-                  TAG_VERSION=${GITHUB_REF#refs/tags/v}
-                  if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-                    echo "Version mismatch: package.json ($PACKAGE_VERSION) != tag ($TAG_VERSION)"
-                    exit 1
-                  fi
-              env:
-                  GITHUB_REF: ${{ github.ref }}
-            - name: Generate release notes
-              run: |
-                  PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
-                  git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" > release-notes.md
-            - name: Create GitHub Release
-              uses: actions/create-release@v1
-              with:
-                  tag_name: ${{ github.ref_name }}
-                  release_name: ${{ github.ref_name }}
-                  body_path: ./release-notes.md
-                  draft: false
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    request-approval:
-        needs: [create-release]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
-        runs-on: ubuntu-latest
-        environment:
+        environment: 
             name: production
+            url: https://www.npmjs.com/package/odata-builder
+        timeout-minutes: 60
         steps:
-            - name: Wait for approval
-              run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
+            - name: 'Awaiting Approval for NPM Publication'
+              run: |
+                  echo "🔒 NPM Publication requires manual approval"
+                  echo ""
+                  echo "📋 Release Details:"
+                  echo "   Version: v${{ needs.version-check.outputs.version }}"
+                  echo "   Release URL: ${{ github.event.release.html_url }}"
+                  echo ""
+                  echo "✅ Please review the build artifacts and approve to publish to NPM"
 
-    publish:
-        needs: [request-approval]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
+    publish-to-npm:
+        name: 'Publish to NPM'
+        needs: [request-release-approval, version-check]
+        if: github.event_name == 'release'
         runs-on: ubuntu-latest
+        timeout-minutes: 10
+        environment:
+            name: npm-registry
+            url: https://www.npmjs.com/package/odata-builder
         steps:
-            - uses: actions/checkout@v3
-            - name: Download build artifacts
+            - name: 'Setup Node.js for NPM'
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: 'Download Release Package'
               uses: actions/download-artifact@v4
               with:
-                  name: dist-${{ github.run_id }}-${{ github.ref_name }}
-                  path: dist
-            - name: Use Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: '20'
-                  registry-url: 'https://registry.npmjs.org'
-            - name: Publish to NPM
-              run: cd dist && npm publish --access public
+                  name: npm-package-${{ github.run_id }}
+                  path: ./package
+
+            - name: 'Verify Package Contents'
+              run: |
+                  cd package
+                  echo "📦 Package contents:"
+                  ls -la
+                  
+                  echo ""
+                  echo "📄 package.json:"
+                  cat package.json | jq '.'
+
+            - name: 'Publish to NPM'
+              run: |
+                  cd package
+                  
+                  # Validate package before publishing
+                  echo "🔍 Running final package validation..."
+                  npm pack --dry-run
+                  
+                  # Check if version already exists on NPM
+                  CURRENT_VERSION="${{ needs.version-check.outputs.version }}"
+                  if npm view "odata-builder@$CURRENT_VERSION" version >/dev/null 2>&1; then
+                      echo "❌ Version $CURRENT_VERSION already exists on NPM!"
+                      echo "Please increment the version number."
+                      exit 1
+                  fi
+                  
+                  echo "🚀 Publishing stable release v$CURRENT_VERSION to NPM..."
+                  npm publish --access public
+                  echo "✅ Published as stable release!"
+                  echo "📥 Install with: npm install odata-builder"
+                  
+                  # Verify publication succeeded
+                  sleep 5
+                  if npm view "odata-builder@$CURRENT_VERSION" version >/dev/null 2>&1; then
+                      echo "✅ Publication verified on NPM registry"
+                  else
+                      echo "⚠️ Could not verify publication (may take a few minutes to appear)"
+                  fi
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: 'Post Publication Summary'
+              run: |
+                  echo "🎉 Publication completed successfully!"
+                  echo ""
+                  echo "📦 Package: odata-builder@${{ needs.version-check.outputs.version }}"
+                  echo "🔗 NPM: https://www.npmjs.com/package/odata-builder"
+                  echo "📚 GitHub: ${{ github.event.release.html_url }}"
+                  echo "📖 Docs: https://github.com/${{ github.repository }}"
+
+    # ============================================================================
+    # PIPELINE STATUS
+    # ============================================================================
+    
+    pipeline-status:
+        name: 'Pipeline Status'
+        if: always()
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        needs: [pr-checks, check-secrets, test, lint, audit, build, version-check, release-build, publish-to-npm]
+        steps:
+            - name: 'Report Pipeline Status'
+              run: |
+                  echo "📊 CI/CD Pipeline Summary"
+                  echo "========================="
+                  echo ""
+                  echo "Event: ${{ github.event_name }}"
+                  echo "Ref: ${{ github.ref }}"
+                  echo ""
+                  
+                  # Determine pipeline type
+                  if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                      PIPELINE_TYPE="🔥 Main Branch (Full Pipeline)"
+                  elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      PIPELINE_TYPE="🔍 Pull Request (Full Pipeline)"
+                  elif [[ "${{ github.event_name }}" == "release" ]]; then
+                      PIPELINE_TYPE="🚀 Release Pipeline"
+                  else
+                      PIPELINE_TYPE="⚡ Feature Branch (Fast Pipeline)"
+                  fi
+                  
+                  echo "Pipeline Type: $PIPELINE_TYPE"
+                  echo ""
+                  
+                  # Check job statuses
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      echo "🔍 Pull Request Pipeline Results:"
+                      echo "PR Checks: ${{ needs.pr-checks.result }}"
+                  fi
+                  
+                  if [[ "${{ github.event_name }}" != "release" ]]; then
+                      echo "🔄 CI Pipeline Results:"
+                      echo "Security Check: ${{ needs.check-secrets.result }}"
+                      echo "Tests: ${{ needs.test.result }}"  
+                      echo "Linting: ${{ needs.lint.result }}"
+                      if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.event_name }}" == "pull_request" ]]; then
+                          echo "Security Audit: ${{ needs.audit.result }}"
+                      else
+                          echo "Security Audit: ⏭️ Skipped (feature branch optimization)"
+                      fi
+                      echo "Build: ${{ needs.build.result }}"
+                  fi
+                  
+                  if [[ "${{ github.event_name }}" == "release" ]]; then
+                      echo "🚀 Release Pipeline Results:"
+                      echo "Version Check: ${{ needs.version-check.result }}"
+                      echo "Release Build: ${{ needs.release-build.result }}"
+                      echo "NPM Publication: ${{ needs.publish-to-npm.result }}"
+                  fi
+                  
+                  echo ""
+                  echo "✅ Pipeline completed"
