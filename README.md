@@ -3,7 +3,7 @@
 Generate Typesafe OData v4 Queries with Ease. odata-builder ensures your queries are correct as you write them, eliminating worries about incorrect query formats.
 
 [![build and test](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml)
-[![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
+[![npm](https://img.shields.io/npm/v/odata-builder?logo=npm)](https://www.npmjs.com/package/odata-builder)
 
 ## ⚠️ Breaking Changes in v0.8.0
 
