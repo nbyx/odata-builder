@@ -9,6 +9,12 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  pull-requests: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -324,6 +330,9 @@ jobs:
     if: github.event_name == 'release'
     needs: [setup, build, release-validation]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment:
       name: npm-registry
       url: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}
